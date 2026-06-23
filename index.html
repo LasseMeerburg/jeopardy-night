@@ -881,11 +881,8 @@ function renderClue(){
   } else if(revealed){
     foot = `<div class="judge">${judgeRowsAll(val)}</div><div class="center">${undoBtn}<button class="btn good big" data-act="close-clue">Back to board</button></div>`;
   } else if(b.phase==="reading"){
-    // host has not opened buzzers yet (anti-mash gate)
-    foot = `
-      <div class="center"><div class="buzz-status">Read the clue aloud, then open the buzzers</div></div>
-      <div class="center"><button class="btn gold big" data-act="open-buzzers">Open buzzers <span class="khint">space</span></button>
-        <button class="btn ghost" data-act="reveal">Reveal answer</button></div>`;
+    // brief pause before buzzers open automatically
+    foot = `<div class="center"><div class="buzz-status">Get ready...</div></div>`;
   } else if(winner===null){
     // armed, waiting for a buzz
     foot = `
@@ -1106,7 +1103,8 @@ function updateAnswerClockUI(left){ const el=$("#answerClock"); if(el){ el.textC
 function newBuzz(phase){ return {phase:phase||"idle", winner:null, order:[], times:{}, lockout:[], armAt:0, winnerAt:0}; }
 function idleBuzzers(){ state.buzz=newBuzz("idle"); stopAnswerClock(); broadcastBuzz(); }
 function readyBuzzers(){ state.buzz=newBuzz("reading"); stopAnswerClock(); broadcastBuzz(); } // clue open, host has not opened buzzers yet
-function openBuzzers(){ // host gate (and re-open for a steal); keeps any lockout
+function openBuzzers(){ // arm the buzzers (auto after a short delay, or re-open for a steal); keeps any lockout
+  clearAutoArm();
   const b=state.buzz; b.phase="armed"; b.winner=null; b.order=[]; b.times={}; b.armAt=Date.now(); b.winnerAt=0;
   stopAnswerClock(); Sound.open(); broadcastBuzz(); renderClue();
 }
@@ -1435,14 +1433,26 @@ function startPlay(game){
   state.controlling=0; state.round=0; state.undo=[]; idleBuzzers();
   show("setup");
 }
+/* Buzzers open by themselves a short, randomized moment after a normal clue appears. */
+let _autoArm=null;
+function clearAutoArm(){ if(_autoArm){ clearTimeout(_autoArm); _autoArm=null; } }
+function scheduleAutoArm(){
+  clearAutoArm();
+  const delay = 100 + Math.floor(Math.random()*401); // 0.1 to 0.5 seconds
+  _autoArm = setTimeout(()=>{ _autoArm=null;
+    if(state.screen==="clue" && !state.clueRevealed && state.buzz.phase==="reading") openBuzzers();
+  }, delay);
+}
 function openClue(ri,ci,ii){
+  clearAutoArm();
   state.clue={ri,ci,ii}; state.clueRevealed=false; state.lastCorrect=null;
   const clue=state.game.rounds[ri].categories[ci].clues[ii];
   if(clue.dailyDouble){ state.ddStage="splash"; state.ddWager=0; Sound.daily(); idleBuzzers(); broadcastClue(); }
-  else { state.ddStage=null; Sound.open(); readyBuzzers(); broadcastClue(); }
+  else { state.ddStage=null; Sound.open(); readyBuzzers(); broadcastClue(); scheduleAutoArm(); }
   show("clue");
 }
 function closeClue(){
+  clearAutoArm();
   const {ri,ci,ii}=state.clue;
   state.game.rounds[ri].categories[ci].clues[ii].answered=true;
   if(state.lastCorrect!==null) state.controlling=state.lastCorrect;
@@ -1596,11 +1606,10 @@ app.addEventListener("click", async (e)=>{
     case "dd-confirm-wager": { const max=+t.getAttribute("data-max"); const min=+t.getAttribute("data-min"); state.ddWager=clampWager(($("#ddWagerInput")||{}).value, min, max); state.ddStage="play"; state.clueRevealed=false; renderClue(); break; }
 
     /* clue: buzzing + reveal + judge */
-    case "open-buzzers": openBuzzers(); break;
     case "buzz": buzzIn(i,"screen"); break;
     case "buzz-correct": buzzCorrect(i, parseInt(t.getAttribute("data-amt"),10)); break;
     case "buzz-wrong": buzzWrong(i, parseInt(t.getAttribute("data-amt"),10)); break;
-    case "reveal": state.clueRevealed=true; stopTimer(); stopAnswerClock(); idleBuzzers(); broadcastClue(); renderClue(); break;
+    case "reveal": clearAutoArm(); state.clueRevealed=true; stopTimer(); stopAnswerClock(); idleBuzzers(); broadcastClue(); renderClue(); break;
     case "timer-toggle": startTimer(30); t.disabled=true; t.textContent="Timer running"; break;
     case "judge": judge(i, t.getAttribute("data-correct")==="1", parseInt(t.getAttribute("data-amt"),10)); break;
     case "close-clue": closeClue(); break;
@@ -1648,12 +1657,9 @@ app.addEventListener("change",(e)=>{
   if(el.hasAttribute("data-opt-base")){ if(!state.game.opt)state.game.opt=defaultOpt(); state.game.opt.base=Math.max(1,parseInt(el.value,10)||200); renderEditorBody(); return; }
 });
 
-/* keyboard: space opens buzzers, number keys buzz, Esc closes a revealed clue */
+/* keyboard: number keys buzz, Esc closes a revealed clue (buzzers open automatically) */
 document.addEventListener("keydown",(e)=>{
   if(state.screen==="clue" && !state.clueRevealed){
-    const clue = state.clue ? state.game.rounds[state.clue.ri].categories[state.clue.ci].clues[state.clue.ii] : null;
-    const normal = clue && !(clue.dailyDouble && state.ddStage && state.ddStage!=="play");
-    if(normal && state.buzz.phase==="reading" && (e.key===" "||e.code==="Space")){ e.preventDefault(); openBuzzers(); return; }
     if(state.buzz.phase==="armed" && state.buzz.winner===null){
       const k=BUZZ_KEYS.indexOf(e.key);
       if(k>=0 && k<state.players.length){ e.preventDefault(); buzzIn(k,"key"); return; }
