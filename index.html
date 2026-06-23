@@ -218,15 +218,19 @@ const ROUND_NAMES = ["Jeopardy","Double Jeopardy"];
 const BUZZ_KEYS = ["1","2","3","4","5","6"]; // host keyboard buzz keys per player
 
 /* Connection servers for the phone <-> host link.
-   STUN below is free and needs no account; it helps phones and the host find each other
-   on ordinary home and hotspot networks.
-   If you ever need players on DIFFERENT networks (or a Wi-Fi that blocks device-to-device
-   traffic), you need a TURN relay. Free TURN now requires a quick signup: create a free
-   account at cloudflare.com (Realtime TURN) or metered.ca (Open Relay), copy the server
-   entries they give you, and paste them into EXTRA_ICE below. Everything else keeps working. */
+   STUN (below) is free and needs no account; it is enough on home Wi-Fi and phone hotspots.
+   To get through a locked-down network like school / eduroam Wi-Fi, you need a relay (TURN).
+   Easiest free option (about 5 minutes, no card):
+     1. Make a free account at https://www.metered.ca/ (Open Relay).
+     2. In the dashboard, copy your TURN credentials API URL. It looks like:
+          https://YOURAPP.metered.live/api/v1/turn/credentials?apiKey=YOUR_KEY
+     3. Paste that whole URL between the quotes in TURN_FETCH_URL below, then redeploy.
+   The app then fetches fresh relay servers (including the firewall-friendly TLS port 443)
+   whenever someone connects. Leave it blank to stay STUN-only (hotspot / home Wi-Fi). */
+const TURN_FETCH_URL = "https://supperclub.metered.live/api/v1/turn/credentials?apiKey=2dc62abb8ba1b171c5228347ba6528c3a8e5";
+/* Alternatively, paste static relay entries here instead of using TURN_FETCH_URL: */
 const EXTRA_ICE = [
-  // Example shape after you get free credentials (delete this comment and add real ones):
-  // { urls: "turn:turn.example.com:3478", username: "YOUR_USER", credential: "YOUR_PASS" },
+  // { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "YOUR_USER", credential: "YOUR_PASS" },
 ];
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
@@ -234,7 +238,28 @@ const ICE_SERVERS = [
   { urls: "stun:stun.cloudflare.com:3478" },
   ...EXTRA_ICE
 ];
-const PEER_OPTS = { debug: 1, config: { iceServers: ICE_SERVERS } };
+/* Fetch TURN credentials once (cached) and merge with the STUN list above. */
+let _icePromise = null;
+function ensureIce(){
+  if(_icePromise) return _icePromise;
+  _icePromise = (async ()=>{
+    let servers = ICE_SERVERS.slice();
+    if(TURN_FETCH_URL){
+      try{
+        const r = await fetch(TURN_FETCH_URL);
+        if(r.ok){ const arr = await r.json(); if(Array.isArray(arr) && arr.length) servers = servers.concat(arr); }
+      }catch(e){}
+    }
+    return servers;
+  })();
+  return _icePromise;
+}
+function peerOpts(servers){ return { debug:1, config:{ iceServers: servers } }; }
+
+/* Wager rules: nobody can ever wager a negative amount.
+   Daily Double minimum is WAGER_MIN; Final Jeopardy minimum is 0 (you may decline to bet). */
+const WAGER_MIN = 5;
+function clampWager(w, lo, hi){ w = parseInt(w,10); if(isNaN(w)) w = lo; if(w < lo) w = lo; if(w > hi) w = hi; return w; }
 
 /* tiny self-contained image for the sample (Japanese flag), so it always renders */
 const SAMPLE_FLAG = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2090%2060%27%3E%3Crect%20width%3D%2790%27%20height%3D%2760%27%20fill%3D%27%23ffffff%27/%3E%3Ccircle%20cx%3D%2745%27%20cy%3D%2730%27%20r%3D%2718%27%20fill%3D%27%23bc002d%27/%3E%3C/svg%3E";
@@ -715,17 +740,19 @@ function renderClue(){
     }
     if(state.ddStage==="wager"){
       const max=Math.max(state.players[state.controlling].score, VALUES[ri][VALUES[ri].length-1]);
+      const min=Math.min(WAGER_MIN, max);
+      const def=clampWager(val, min, max);
       app.innerHTML = `
         <div class="overlay dd">
           <div class="ov-top"><span class="where">${esc(cat)} - Daily Double</span><span class="val"></span></div>
           <div class="ov-body">
             <div class="clue-text" style="font-size:clamp(24px,4vw,42px);">${esc(controllingName())}, how much do you wager?</div>
             <div class="ui" style="display:flex;flex-direction:column;gap:8px;align-items:center;">
-              <input class="txt" id="ddWagerInput" type="number" min="0" max="${max}" value="${val}" style="width:220px;font-size:26px;text-align:center;font-family:'Anton',sans-serif;color:var(--gold);">
-              <div class="muted" style="font-size:13px;">Up to ${money(max)} (your score or the top clue value).</div>
+              <input class="txt" id="ddWagerInput" type="number" min="${min}" max="${max}" value="${def}" data-wmin="${min}" data-wmax="${max}" style="width:220px;font-size:26px;text-align:center;font-family:'Anton',sans-serif;color:var(--gold);">
+              <div class="muted" style="font-size:13px;">Between ${money(min)} and ${money(max)} (your score or the top clue value).</div>
             </div>
           </div>
-          <div class="ov-foot"><div class="center"><button class="btn gold big" data-act="dd-confirm-wager" data-max="${max}">Reveal the clue</button></div></div>
+          <div class="ov-foot"><div class="center"><button class="btn gold big" data-act="dd-confirm-wager" data-min="${min}" data-max="${max}">Reveal the clue</button></div></div>
         </div>`;
       setTimeout(()=>{const el=$("#ddWagerInput"); if(el){el.focus();el.select();}},30);
       return;
@@ -822,9 +849,9 @@ function renderFinal(){
       <div class="final-cat" style="font-size:clamp(24px,5vw,44px);">${esc(f.category||"Final Category")}</div>
       <p class="ui muted">Type each player's secret wager. Max is their current score (or 0 if not positive).</p>
       <div class="wager-grid">
-        ${state.players.map((p,i)=>{ const max=Math.max(0,p.score); return `
-          <div class="wbox ui"><div class="wn">${esc(p.name)}</div><div class="wmax">${money(p.score)} available</div>
-            <input class="txt" type="number" min="0" max="${max}" value="${state.finalWagers[i]||0}" data-fwager data-i="${i}" data-max="${max}" ${max<=0?"disabled":""} style="font-family:'Anton',sans-serif;color:var(--gold);font-size:20px;text-align:center;"></div>`; }).join("")}
+        ${state.players.map((p,i)=>{ const max=Math.max(0,p.score); const out=max<=0; return `
+          <div class="wbox ui"><div class="wn">${esc(p.name)}</div><div class="wmax">${out?`Sitting out (${money(p.score)})`:`Up to ${money(max)}`}</div>
+            <input class="txt" type="number" min="0" max="${max}" value="${out?0:(state.finalWagers[i]||0)}" data-fwager data-i="${i}" data-max="${max}" data-wmin="0" data-wmax="${max}" ${out?"disabled":""} style="font-family:'Anton',sans-serif;color:var(--gold);font-size:20px;text-align:center;"></div>`; }).join("")}
       </div>
       <div class="center" style="margin-top:18px;"><button class="btn gold big" data-act="final-reveal-clue">Lock wagers and show clue</button></div>`);
     return;
@@ -947,21 +974,23 @@ const Net = {
   hostStart(){
     if(typeof Peer==="undefined"){ state.net.status="error"; renderIfBoard(); return; }
     state.net.status="connecting"; renderIfBoard();
-    let tries=0;
-    const attempt=()=>{
-      const code=makeCode(); const id=peerId(code);
-      const peer=new Peer(id, PEER_OPTS);
-      this.peer=peer;
-      peer.on("open",()=>{ state.net.on=true; state.net.code=code; state.net.status="on"; renderIfBoard(); });
-      peer.on("connection",(conn)=>{ this.attachConn(conn); });
-      peer.on("error",(err)=>{
-        const t=(err&&err.type)||"";
-        if((t==="unavailable-id"||t==="invalid-id") && tries<4){ tries++; try{peer.destroy();}catch(e){} attempt(); return; }
-        if(t==="peer-unavailable") return; // a phone tried a stale code; ignore
-        state.net.status="error"; renderIfBoard();
-      });
-    };
-    attempt();
+    ensureIce().then((servers)=>{
+      let tries=0;
+      const attempt=()=>{
+        const code=makeCode(); const id=peerId(code);
+        const peer=new Peer(id, peerOpts(servers));
+        this.peer=peer;
+        peer.on("open",()=>{ state.net.on=true; state.net.code=code; state.net.status="on"; renderIfBoard(); });
+        peer.on("connection",(conn)=>{ this.attachConn(conn); });
+        peer.on("error",(err)=>{
+          const t=(err&&err.type)||"";
+          if((t==="unavailable-id"||t==="invalid-id") && tries<4){ tries++; try{peer.destroy();}catch(e){} attempt(); return; }
+          if(t==="peer-unavailable") return; // a phone tried a stale code; ignore
+          state.net.status="error"; renderIfBoard();
+        });
+      };
+      attempt();
+    });
   },
   attachConn(conn){
     conn.on("open",()=>{ this.conns[conn.peer]=conn; });
@@ -1060,21 +1089,23 @@ function ctrlConnect(){
   if(typeof Peer==="undefined"){ c.status="Buzzer library could not load. Check your connection and reload."; renderController(); return; }
   try{ if(c.peer) c.peer.destroy(); }catch(e){}
   c.canRetry=false; c.status="Connecting...";
-  const peer=new Peer(PEER_OPTS); c.peer=peer;
-  peer.on("open",()=>{
-    const conn=peer.connect(peerId(c.code),{reliable:true}); c.conn=conn;
-    conn.on("open",()=>{ c.status="Connected"; conn.send({type:"join", name:c.name}); renderController(); });
-    conn.on("data",(data)=>{ handleHostData(data); });
-    conn.on("close",()=>{ c.canRetry=true; c.status="Disconnected. Tap Reconnect."; renderController(); });
-    conn.on("error",()=>{ c.canRetry=true; c.status="Could not link to the host screen. Put your phone on the same Wi-Fi (a hotspot works best), then tap Reconnect."; renderController(); });
-  });
-  peer.on("error",(err)=>{
-    const t=(err&&err.type)||"";
-    c.canRetry=true;
-    if(t==="peer-unavailable"){ c.status="No game found for this code. On the host, open Phone buzzers and check the code, then tap Reconnect."; }
-    else if(t==="browser-incompatible"){ c.status="This browser does not support buzzers. Try Chrome or Safari."; }
-    else { c.status="Could not connect. Put your phone on the same Wi-Fi as the host screen (a hotspot works best), then tap Reconnect."; }
-    renderController();
+  ensureIce().then((servers)=>{
+    const peer=new Peer(peerOpts(servers)); c.peer=peer;
+    peer.on("open",()=>{
+      const conn=peer.connect(peerId(c.code),{reliable:true}); c.conn=conn;
+      conn.on("open",()=>{ c.status="Connected"; conn.send({type:"join", name:c.name}); renderController(); });
+      conn.on("data",(data)=>{ handleHostData(data); });
+      conn.on("close",()=>{ c.canRetry=true; c.status="Disconnected. Tap Reconnect."; renderController(); });
+      conn.on("error",()=>{ c.canRetry=true; c.status="Could not link to the host screen. Put your phone on the same Wi-Fi (a hotspot works best), then tap Reconnect."; renderController(); });
+    });
+    peer.on("error",(err)=>{
+      const t=(err&&err.type)||"";
+      c.canRetry=true;
+      if(t==="peer-unavailable"){ c.status="No game found for this code. On the host, open Phone buzzers and check the code, then tap Reconnect."; }
+      else if(t==="browser-incompatible"){ c.status="This browser does not support buzzers. Try Chrome or Safari."; }
+      else { c.status="Could not connect. Put your phone on the same Wi-Fi as the host screen (a hotspot works best), then tap Reconnect."; }
+      renderController();
+    });
   });
 }
 function handleHostData(data){
@@ -1255,7 +1286,7 @@ app.addEventListener("click", async (e)=>{
 
     /* clue: daily double */
     case "dd-to-wager": state.ddStage="wager"; renderClue(); break;
-    case "dd-confirm-wager": { const max=parseInt(t.getAttribute("data-max"),10); let w=parseInt(($("#ddWagerInput")||{}).value,10); if(isNaN(w)||w<0)w=0; if(w>max)w=max; state.ddWager=w; state.ddStage="play"; state.clueRevealed=false; renderClue(); break; }
+    case "dd-confirm-wager": { const max=+t.getAttribute("data-max"); const min=+t.getAttribute("data-min"); state.ddWager=clampWager(($("#ddWagerInput")||{}).value, min, max); state.ddStage="play"; state.clueRevealed=false; renderClue(); break; }
 
     /* clue: buzzing + reveal + judge */
     case "buzz": buzzIn(i,"screen"); break;
@@ -1269,7 +1300,7 @@ app.addEventListener("click", async (e)=>{
     /* final */
     case "final-to-wager": state.finalStep="wager"; renderFinal(); break;
     case "final-reveal-clue":
-      document.querySelectorAll("[data-fwager]").forEach(inp=>{ const idx=+inp.getAttribute("data-i"); const mx=+inp.getAttribute("data-max"); let w=parseInt(inp.value,10); if(isNaN(w)||w<0)w=0; if(w>mx)w=mx; state.finalWagers[idx]=w; });
+      document.querySelectorAll("[data-fwager]").forEach(inp=>{ const idx=+inp.getAttribute("data-i"); const mx=+inp.getAttribute("data-max"); state.finalWagers[idx]=clampWager(inp.value, 0, mx); });
       state.finalStep="clue"; renderFinal(); break;
     case "final-to-reveal": stopTimer(); state.finalStep="reveal"; renderFinal(); break;
     case "final-judge": { const oc=t.getAttribute("data-oc"); state.finalOutcomes[i]=(state.finalOutcomes[i]===oc)?null:oc; commitFinalScores(); renderFinal(); break; }
@@ -1293,6 +1324,7 @@ app.addEventListener("input",(e)=>{
 /* editor change (selects + checkboxes) */
 app.addEventListener("change",(e)=>{
   const el=e.target;
+  if(el.hasAttribute("data-wmin")){ const lo=+el.getAttribute("data-wmin"), hi=+el.getAttribute("data-wmax"); el.value=clampWager(el.value, lo, hi); return; }
   if(el.hasAttribute("data-dd")){ const o=state.game.rounds[+el.getAttribute("data-r")].categories[+el.getAttribute("data-c")].clues[+el.getAttribute("data-i")]; o.dailyDouble=el.checked; const lab=el.closest("[data-ddlabel]"); if(lab)lab.classList.toggle("on",el.checked); return; }
   if(el.hasAttribute("data-mtype")){ const o=getClueByAttrs(el); o.mediaType=el.value; if(el.value==="none") o.media=""; renderEditorBody(); return; }
 });
