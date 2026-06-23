@@ -907,14 +907,16 @@ function buzzCorrect(i, amt){
   state.players[i].score += amt; state.lastCorrect=i;
   state.buzz.armed=false; state.clueRevealed=true; idleBuzzers(); renderClue();
 }
+function buzzStateMsg(){
+  const w=state.buzz.winner;
+  return { type:"buzzstate",
+    mode: (w!==null) ? "locked" : ((!state.clueRevealed && state.buzz.armed) ? "armed" : "idle"),
+    winner: w, winnerName: (w!==null && state.players[w]) ? state.players[w].name : "",
+    lockout: state.buzz.lockout.slice() };
+}
 function broadcastBuzz(){
   if(!state.net.on) return;
-  const w=state.buzz.winner;
-  Net.broadcast({type:"buzzstate",
-    mode: state.screen==="clue" && !state.clueRevealed && state.buzz.armed ? "armed" : (w!==null?"locked":"idle"),
-    winner: w, winnerName: w!==null && state.players[w] ? state.players[w].name : "",
-    lockout: state.buzz.lockout.slice()
-  });
+  Net.broadcast(buzzStateMsg());
   pushScoresToPhones();
 }
 
@@ -985,10 +987,7 @@ function handlePhoneData(conn, data){
   }
 }
 function sendBuzzStateTo(conn){
-  const w=state.buzz.winner;
-  try{ conn.send({type:"buzzstate",
-    mode: state.screen==="clue" && !state.clueRevealed && state.buzz.armed ? "armed" : (w!==null?"locked":"idle"),
-    winner:w, winnerName: w!==null&&state.players[w]?state.players[w].name:"", lockout:state.buzz.lockout.slice() }); }catch(e){}
+  try{ conn.send(buzzStateMsg()); }catch(e){}
 }
 function pushScoresToPhones(){
   if(!state.net.on) return;
