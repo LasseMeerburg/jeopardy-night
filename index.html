@@ -217,6 +217,25 @@ const VALUES = { 0:[200,400,600,800,1000], 1:[400,800,1200,1600,2000] };
 const ROUND_NAMES = ["Jeopardy","Double Jeopardy"];
 const BUZZ_KEYS = ["1","2","3","4","5","6"]; // host keyboard buzz keys per player
 
+/* Connection servers for the phone <-> host link.
+   STUN below is free and needs no account; it helps phones and the host find each other
+   on ordinary home and hotspot networks.
+   If you ever need players on DIFFERENT networks (or a Wi-Fi that blocks device-to-device
+   traffic), you need a TURN relay. Free TURN now requires a quick signup: create a free
+   account at cloudflare.com (Realtime TURN) or metered.ca (Open Relay), copy the server
+   entries they give you, and paste them into EXTRA_ICE below. Everything else keeps working. */
+const EXTRA_ICE = [
+  // Example shape after you get free credentials (delete this comment and add real ones):
+  // { urls: "turn:turn.example.com:3478", username: "YOUR_USER", credential: "YOUR_PASS" },
+];
+const ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun.cloudflare.com:3478" },
+  ...EXTRA_ICE
+];
+const PEER_OPTS = { debug: 1, config: { iceServers: ICE_SERVERS } };
+
 /* tiny self-contained image for the sample (Japanese flag), so it always renders */
 const SAMPLE_FLAG = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2090%2060%27%3E%3Crect%20width%3D%2790%27%20height%3D%2760%27%20fill%3D%27%23ffffff%27/%3E%3Ccircle%20cx%3D%2745%27%20cy%3D%2730%27%20r%3D%2718%27%20fill%3D%27%23bc002d%27/%3E%3C/svg%3E";
 
@@ -912,7 +931,7 @@ const Net = {
     let tries=0;
     const attempt=()=>{
       const code=makeCode(); const id=peerId(code);
-      const peer=new Peer(id,{debug:1});
+      const peer=new Peer(id, PEER_OPTS);
       this.peer=peer;
       peer.on("open",()=>{ state.net.on=true; state.net.code=code; state.net.status="on"; renderIfBoard(); });
       peer.on("connection",(conn)=>{ this.attachConn(conn); });
@@ -980,7 +999,7 @@ function renderIfBoard(){ if(state.screen==="board") renderBoard(); }
 /* ---------- PHONE CONTROLLER (this page opened with #join=CODE) ---------- */
 function parseJoinCode(){ const m=(location.hash||"").match(/join=([A-Za-z0-9]+)/); return m?m[1].toUpperCase():null; }
 
-const Ctrl = { peer:null, conn:null, code:null, index:null, name:"", score:0, mode:"idle", winner:null, winnerName:"", lockout:[], status:"" };
+const Ctrl = { peer:null, conn:null, code:null, index:null, name:"", score:0, mode:"idle", winner:null, winnerName:"", lockout:[], status:"", canRetry:false };
 
 function renderController(){
   const c=Ctrl;
@@ -994,6 +1013,7 @@ function renderController(){
         <input class="txt" id="ctrlName" type="text" maxlength="24" placeholder="Your name" value="${esc(c.name)}" style="max-width:280px;font-size:18px;text-align:center;">
         <button class="btn gold big" data-cact="join">Join game</button>
         <div class="ctrl-status">${esc(statusText)}</div>
+        ${c.canRetry?`<button class="btn ghost" data-cact="rejoin">Reconnect</button>`:""}
       </div>`;
     setTimeout(()=>{const el=$("#ctrlName"); if(el)el.focus();},40);
     return;
@@ -1010,7 +1030,7 @@ function renderController(){
       <div class="ctrl-score">${money(c.score)}</div>
       <button class="ctrl-buzz ${btnClass}" id="buzzBtn" ${btnDisabled?"disabled":""} data-cact="buzz">${esc(btnLabel)}</button>
       <div class="ctrl-status">${esc(statusText || statusForMode())}</div>
-      ${c.status.indexOf("Disconnected")>=0?`<button class="btn ghost" data-cact="rejoin">Reconnect</button>`:""}
+      ${c.canRetry?`<button class="btn ghost" data-cact="rejoin">Reconnect</button>`:""}
     </div>`;
 }
 function statusForMode(){
@@ -1022,26 +1042,28 @@ function statusForMode(){
 function ctrlConnect(){
   const c=Ctrl;
   if(typeof Peer==="undefined"){ c.status="Buzzer library could not load. Check your connection and reload."; renderController(); return; }
-  c.status="Connecting...";
-  const peer=new Peer({debug:1}); c.peer=peer;
+  try{ if(c.peer) c.peer.destroy(); }catch(e){}
+  c.canRetry=false; c.status="Connecting...";
+  const peer=new Peer(PEER_OPTS); c.peer=peer;
   peer.on("open",()=>{
     const conn=peer.connect(peerId(c.code),{reliable:true}); c.conn=conn;
     conn.on("open",()=>{ c.status="Connected"; conn.send({type:"join", name:c.name}); renderController(); });
     conn.on("data",(data)=>{ handleHostData(data); });
-    conn.on("close",()=>{ c.status="Disconnected. Tap Reconnect."; renderController(); });
-    conn.on("error",()=>{ c.status="Connection problem. Tap Reconnect."; renderController(); });
+    conn.on("close",()=>{ c.canRetry=true; c.status="Disconnected. Tap Reconnect."; renderController(); });
+    conn.on("error",()=>{ c.canRetry=true; c.status="Could not link to the host screen. Put your phone on the same Wi-Fi (a hotspot works best), then tap Reconnect."; renderController(); });
   });
   peer.on("error",(err)=>{
     const t=(err&&err.type)||"";
-    if(t==="peer-unavailable"){ c.status="No game found for this code. Ask the host to open phone buzzers."; }
+    c.canRetry=true;
+    if(t==="peer-unavailable"){ c.status="No game found for this code. On the host, open Phone buzzers and check the code, then tap Reconnect."; }
     else if(t==="browser-incompatible"){ c.status="This browser does not support buzzers. Try Chrome or Safari."; }
-    else { c.status="Could not connect. Make sure you opened the host's https link."; }
+    else { c.status="Could not connect. Put your phone on the same Wi-Fi as the host screen (a hotspot works best), then tap Reconnect."; }
     renderController();
   });
 }
 function handleHostData(data){
   if(!data||!data.type) return; const c=Ctrl;
-  if(data.type==="welcome"){ c.index=data.index; if(data.name)c.name=data.name; if(typeof data.score==="number")c.score=data.score; c.status=""; renderController(); }
+  if(data.type==="welcome"){ c.index=data.index; if(data.name)c.name=data.name; if(typeof data.score==="number")c.score=data.score; c.status=""; c.canRetry=false; renderController(); }
   else if(data.type==="buzzstate"){ c.mode=data.mode; c.winner=(typeof data.winner==="number")?data.winner:null; c.winnerName=data.winnerName||""; c.lockout=data.lockout||[]; c.status=""; renderController(); }
   else if(data.type==="score"){ if(data.index===c.index){ c.score=data.score; renderController(); } }
 }
@@ -1052,7 +1074,7 @@ document.addEventListener("click",(e)=>{
   const a=t.getAttribute("data-cact"); const c=Ctrl;
   if(a==="join"){ const nm=($("#ctrlName")||{}).value||""; c.name=nm.trim().slice(0,24)||"Player"; ctrlConnect(); }
   else if(a==="buzz"){ if(c.conn&&c.conn.open && c.mode==="armed" && !c.lockout.includes(c.index)){ try{ c.conn.send({type:"buzz"}); }catch(e){} buzzSound(); } }
-  else if(a==="rejoin"){ try{ if(c.peer)c.peer.destroy(); }catch(e){} c.peer=null;c.conn=null; ctrlConnect(); }
+  else if(a==="rejoin"){ const nm=($("#ctrlName")||{}).value; if(nm!=null && nm.trim()) c.name=nm.trim().slice(0,24); ctrlConnect(); }
 });
 
 /* =======================================================================
