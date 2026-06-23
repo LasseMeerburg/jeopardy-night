@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jeopardy Night</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- Peer-to-peer buzzers (phones) and QR join code. Loaded from cdnjs; the game still runs without them. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --board-blue:#060CE9; --board-blue-dark:#0509a8;
+    --cell-top:#0a18d8; --cell-bot:#060ca6;
+    --gold:#d69f4c; --gold-bright:#f3c172;
+    --ink:#03051c; --ink-2:#080c2c;
+    --white:#ffffff; --answered:#05083f; --line:#0a1180;
+    --good:#27c08a; --good-dark:#16855f; --bad:#ef5364; --bad-dark:#b23142;
+    --panel:#0c1136; --panel-2:#151b50; --muted:#9aa3d4;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #11185a 0%, var(--ink) 60%), var(--ink);
+    color:var(--white);font-family:"Oswald",system-ui,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;
+  }
+  .ui{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
+  input,textarea,select{font-family:system-ui,sans-serif;}
+  :focus-visible{outline:3px solid var(--gold-bright);outline-offset:2px;}
+  #app{max-width:1180px;margin:0 auto;padding:22px 16px 60px;}
+
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:baseline;gap:12px;}
+  .brand h1{font-family:"Anton",sans-serif;font-weight:400;letter-spacing:.5px;font-size:clamp(30px,5vw,52px);color:var(--gold);margin:0;line-height:.9;text-shadow:0 3px 0 #7a5a23,0 5px 14px rgba(0,0,0,.5);}
+  .brand .tag{color:var(--muted);font-weight:400;text-transform:uppercase;letter-spacing:3px;font-size:12px;}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 18px;border-radius:10px;font-weight:600;letter-spacing:.4px;background:linear-gradient(180deg,#1a2270,#11185a);color:#fff;border:1px solid #2a3490;transition:transform .12s ease,filter .12s ease,background .12s ease;text-transform:uppercase;font-size:14px;}
+  .btn:hover{filter:brightness(1.12);transform:translateY(-1px);}
+  .btn:active{transform:translateY(0);}
+  .btn.gold{background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#241a06;border-color:#b9863a;}
+  .btn.good{background:linear-gradient(180deg,var(--good),var(--good-dark));border-color:#0f6347;color:#04231a;}
+  .btn.bad{background:linear-gradient(180deg,var(--bad),var(--bad-dark));border-color:#8c2532;}
+  .btn.ghost{background:transparent;border:1px solid #2a3490;color:#cdd3ff;}
+  .btn.ghost:hover{background:#10165a;}
+  .btn.sm{padding:7px 12px;font-size:12px;border-radius:8px;}
+  .btn.big{padding:16px 26px;font-size:17px;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none;filter:none;}
+
+  .card{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid #232a6b;border-radius:16px;padding:18px;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}
+  .spread{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  h2.section{font-family:"Anton",sans-serif;font-weight:400;letter-spacing:.5px;text-transform:uppercase;color:#fff;margin:0 0 12px;font-size:24px;}
+  .muted{color:var(--muted);}
+  label.field{display:block;margin:0 0 10px;}
+  label.field span{display:block;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:5px;}
+  input.txt,textarea.txt,select.txt{width:100%;background:#0a0f3a;border:1px solid #2a3380;border-radius:9px;color:#fff;padding:10px 12px;font-size:15px;}
+  textarea.txt{resize:vertical;min-height:64px;line-height:1.35;}
+
+  /* home */
+  .home-hero{text-align:center;padding:34px 16px 8px;}
+  .home-hero .big{font-family:"Anton",sans-serif;font-size:clamp(54px,12vw,128px);line-height:.86;color:var(--gold);text-shadow:0 6px 0 #7a5a23,0 10px 26px rgba(0,0,0,.55);letter-spacing:1px;}
+  .home-hero .sub{color:#c9d0ff;text-transform:uppercase;letter-spacing:6px;font-size:13px;margin-top:14px;}
+  .home-actions{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:30px 0 10px;}
+  .games-list{display:grid;gap:10px;margin-top:6px;}
+  .game-item{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0a0f3a;border:1px solid #232a6b;border-radius:12px;padding:12px 14px;}
+  .game-item .gname{font-size:18px;font-weight:600;}
+  .game-item .gmeta{font-size:12px;color:var(--muted);}
+  .how{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:18px;}
+  .how .step{background:#0a0f3a;border:1px solid #232a6b;border-radius:12px;padding:14px;}
+  .how .step b{color:var(--gold-bright);}
+
+  /* board */
+  .board-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+  .round-chip{font-family:"Anton",sans-serif;font-size:22px;letter-spacing:.5px;color:var(--gold);text-transform:uppercase;}
+  .board-scroll{overflow-x:auto;padding-bottom:8px;}
+  .board{display:grid;grid-template-columns:repeat(6,minmax(108px,1fr));gap:7px;min-width:680px;background:#000;padding:7px;border-radius:10px;border:2px solid #000;}
+  .cat-cell{background:linear-gradient(180deg,#0a16c4,#060c9c);border-radius:6px;min-height:84px;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px 6px;text-transform:uppercase;font-weight:700;color:#fff;font-size:clamp(12px,1.4vw,16px);line-height:1.06;letter-spacing:.3px;text-shadow:0 1px 2px rgba(0,0,0,.5);}
+  .clue-cell{background:linear-gradient(180deg,var(--cell-top),var(--cell-bot));border-radius:6px;aspect-ratio:1.6/1;min-height:64px;display:flex;align-items:center;justify-content:center;font-family:"Anton",sans-serif;color:var(--gold);font-size:clamp(22px,3vw,38px);transition:transform .12s ease,filter .12s ease;box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);text-shadow:0 2px 0 #6f4f1e,0 3px 8px rgba(0,0,0,.45);position:relative;}
+  .clue-cell:hover{filter:brightness(1.18);transform:translateY(-2px);}
+  .clue-cell.done{background:#05083a;color:transparent;cursor:default;pointer-events:none;box-shadow:none;text-shadow:none;}
+  .clue-cell .mtag{position:absolute;top:5px;right:6px;font-family:system-ui,sans-serif;font-size:10px;color:#cdd3ff;opacity:.7;text-shadow:none;}
+  .board-foot{margin-top:16px;}
+
+  .scores{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:6px;}
+  .pcard{background:#0a0f3a;border:1px solid #232a6b;border-radius:12px;padding:12px;position:relative;}
+  .pcard.control{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset,0 0 18px rgba(214,159,76,.25);}
+  .pcard .pname{font-weight:600;font-size:16px;display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pcard .pscore{font-family:"Anton",sans-serif;font-size:30px;color:var(--gold);margin-top:2px;}
+  .pcard .pscore.neg{color:var(--bad);}
+  .pcard .ptag{font-size:11px;color:var(--muted);margin-top:2px;}
+  .ctrl-tag{position:absolute;top:-9px;right:10px;background:var(--gold);color:#241a06;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 7px;border-radius:20px;text-transform:uppercase;}
+  .pcard .mini{position:absolute;top:8px;right:8px;display:flex;gap:4px;}
+  .pcard .mini button{font-size:14px;width:24px;height:24px;border-radius:6px;background:#11185a;border:1px solid #2a3490;line-height:1;}
+  .net-chip{display:inline-flex;align-items:center;gap:7px;font-family:system-ui,sans-serif;font-size:12px;color:#cdd3ff;background:#0a0f3a;border:1px solid #232a6b;border-radius:20px;padding:5px 11px;}
+  .dot{width:9px;height:9px;border-radius:50%;background:#5a6;display:inline-block;}
+  .dot.off{background:#566;} .dot.on{background:var(--good);box-shadow:0 0 8px var(--good);} .dot.wait{background:var(--gold-bright);}
+
+  /* clue overlay */
+  .overlay{position:fixed;inset:0;background:var(--board-blue);display:flex;flex-direction:column;z-index:50;animation:zoomIn .22s ease;}
+  .overlay.dd{background:linear-gradient(135deg,#0a16c4 0%,#060c9c 100%);}
+  @keyframes zoomIn{from{opacity:0;transform:scale(.96);}to{opacity:1;transform:scale(1);}}
+  .ov-top{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;color:#cfe;}
+  .ov-top .where{text-transform:uppercase;letter-spacing:2px;font-size:13px;color:#bfe;opacity:.85;}
+  .ov-top .val{font-family:"Anton",sans-serif;font-size:28px;color:var(--gold);}
+  .ov-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px 26px;gap:20px;overflow:auto;}
+  .clue-text{font-family:"Oswald",sans-serif;font-weight:500;text-transform:uppercase;font-size:clamp(24px,4.8vw,58px);line-height:1.16;max-width:1000px;text-shadow:0 3px 10px rgba(0,0,0,.4);}
+  .answer-text{font-family:"Oswald",sans-serif;font-weight:700;color:var(--gold-bright);text-transform:uppercase;font-size:clamp(22px,4vw,46px);line-height:1.1;max-width:1000px;border-top:3px solid rgba(255,255,255,.25);padding-top:16px;}
+  .clue-media{max-height:40vh;max-width:92%;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.45);background:#fff2;}
+  .clue-audio{width:min(520px,90vw);height:46px;}
+  .media-fail{font-family:system-ui,sans-serif;font-size:14px;color:#ffd2d2;background:rgba(0,0,0,.25);padding:8px 12px;border-radius:8px;}
+  .dd-splash{font-family:"Anton",sans-serif;color:var(--gold);font-size:clamp(46px,12vw,120px);text-shadow:0 6px 0 #6f4f1e,0 10px 26px rgba(0,0,0,.5);letter-spacing:2px;animation:pop .35s ease;}
+  @keyframes pop{0%{transform:scale(.6);opacity:0;}70%{transform:scale(1.06);}100%{transform:scale(1);opacity:1;}}
+  .ov-foot{padding:14px 20px 22px;display:flex;flex-direction:column;gap:12px;background:rgba(0,0,0,.18);}
+  .judge{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;}
+  .jrow{display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 10px;}
+  .jrow .jn{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .jrow .jb{display:flex;gap:6px;}
+  .center{display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;}
+
+  /* buzzers in clue */
+  .buzz-status{font-family:"Anton",sans-serif;text-transform:uppercase;letter-spacing:1px;font-size:clamp(18px,2.4vw,26px);color:#dfe;}
+  .buzz-status.armed{color:var(--good);}
+  .buzz-winner{font-family:"Anton",sans-serif;font-size:clamp(30px,6vw,64px);color:var(--gold);text-transform:uppercase;text-shadow:0 4px 0 #6f4f1e;animation:pop .3s ease;}
+  .buzz-players{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+  .buzzbtn{display:inline-flex;flex-direction:column;align-items:center;gap:3px;min-width:104px;padding:12px 16px;border-radius:12px;background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#241a06;border:1px solid #b9863a;font-weight:700;text-transform:uppercase;font-size:15px;transition:transform .1s ease,filter .1s ease;}
+  .buzzbtn:hover{filter:brightness(1.08);transform:translateY(-2px);}
+  .buzzbtn .khint{font-family:system-ui,sans-serif;font-size:11px;background:#241a0633;border:1px solid #241a0644;border-radius:5px;padding:1px 6px;}
+  .buzzbtn.out{background:#2a2f55;color:#7c84b8;border-color:#333a66;cursor:not-allowed;}
+  .buzzbtn.out:hover{transform:none;filter:none;}
+
+  /* timer */
+  .timer{display:flex;align-items:center;gap:10px;color:#dfe;font-weight:600;}
+  .timer .bar{height:10px;width:220px;max-width:46vw;background:rgba(0,0,0,.3);border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.2);}
+  .timer .fill{height:100%;background:linear-gradient(90deg,var(--good),var(--gold-bright));width:100%;transition:width 1s linear;}
+  .timer .fill.low{background:linear-gradient(90deg,var(--bad),#ff9d6b);}
+
+  /* editor */
+  .ed-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 16px;}
+  .ed-tabs button{padding:9px 14px;border-radius:9px;background:#0a0f3a;border:1px solid #232a6b;color:#cdd3ff;text-transform:uppercase;font-weight:600;font-size:13px;letter-spacing:.5px;}
+  .ed-tabs button.active{background:linear-gradient(180deg,var(--gold-bright),var(--gold));color:#241a06;border-color:#b9863a;}
+  .cats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;}
+  .catbox{background:#0a0f3a;border:1px solid #232a6b;border-radius:12px;padding:12px;}
+  .cluebox{border-top:1px solid #1c2360;padding-top:10px;margin-top:10px;}
+  .cluebox .vrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
+  .cluebox .val{font-family:"Anton",sans-serif;color:var(--gold);font-size:20px;}
+  .ddtoggle{display:flex;align-items:center;gap:7px;font-size:12px;color:#cdd3ff;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;user-select:none;}
+  .ddtoggle input{width:16px;height:16px;accent-color:var(--gold);}
+  .ddtoggle.on{color:var(--gold-bright);font-weight:700;}
+  .media-row{display:flex;gap:8px;align-items:center;margin:8px 0 4px;flex-wrap:wrap;}
+  .media-row select{flex:0 0 auto;width:auto;background:#0a0f3a;border:1px solid #2a3380;border-radius:8px;color:#fff;padding:8px 10px;font-size:13px;}
+  .media-url{flex:1 1 160px;}
+  .media-preview{margin-top:6px;}
+  .media-preview img{max-height:90px;border-radius:8px;border:1px solid #2a3380;}
+  .media-preview audio{width:100%;height:38px;}
+
+  /* setup */
+  .players-edit{display:grid;gap:10px;max-width:560px;}
+  .pe-row{display:flex;gap:8px;align-items:center;}
+  .pe-row .num{width:30px;text-align:center;color:var(--muted);font-weight:700;}
+  .pe-row .keyhint{font-family:system-ui,sans-serif;font-size:11px;color:var(--muted);white-space:nowrap;}
+
+  /* final */
+  .final-wrap{max-width:900px;margin:0 auto;text-align:center;}
+  .final-cat{font-family:"Anton",sans-serif;color:var(--gold);font-size:clamp(30px,6vw,64px);text-transform:uppercase;text-shadow:0 4px 0 #6f4f1e;margin:10px 0 4px;}
+  .wager-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;text-align:left;margin-top:14px;}
+  .wbox{background:#0a0f3a;border:1px solid #232a6b;border-radius:12px;padding:12px;}
+  .wbox .wn{font-weight:600;margin-bottom:2px;}
+  .wbox .wmax{font-size:12px;color:var(--muted);margin-bottom:8px;}
+  .results-table{width:100%;border-collapse:collapse;margin-top:10px;text-align:left;}
+  .results-table th,.results-table td{padding:10px 12px;border-bottom:1px solid #232a6b;}
+  .results-table th{color:var(--muted);text-transform:uppercase;font-size:12px;letter-spacing:1px;}
+  .results-table td.score{font-family:"Anton",sans-serif;color:var(--gold);font-size:22px;}
+  .winner-banner{font-family:"Anton",sans-serif;font-size:clamp(34px,7vw,72px);color:var(--gold);text-transform:uppercase;text-shadow:0 5px 0 #6f4f1e,0 9px 22px rgba(0,0,0,.5);margin:8px 0;}
+
+  /* modal */
+  .modal{position:fixed;inset:0;background:rgba(2,4,18,.72);display:flex;align-items:center;justify-content:center;z-index:80;padding:18px;animation:zoomIn .18s ease;}
+  .modal-card{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid #2a3490;border-radius:18px;padding:22px;max-width:560px;width:100%;max-height:90vh;overflow:auto;}
+  .qr-wrap{display:flex;gap:18px;align-items:center;flex-wrap:wrap;justify-content:center;}
+  #qrbox{background:#fff;padding:10px;border-radius:12px;width:200px;height:200px;display:flex;align-items:center;justify-content:center;}
+  #qrbox img,#qrbox canvas{display:block;}
+  .roomcode{font-family:"Anton",sans-serif;font-size:46px;letter-spacing:6px;color:var(--gold);text-align:center;}
+  .joinurl{font-family:system-ui,sans-serif;font-size:13px;word-break:break-all;background:#0a0f3a;border:1px solid #2a3380;border-radius:9px;padding:9px 11px;color:#cdd3ff;}
+  .conn-list{display:grid;gap:6px;margin-top:8px;}
+  .conn-item{display:flex;align-items:center;gap:8px;font-size:14px;background:#0a0f3a;border:1px solid #232a6b;border-radius:9px;padding:7px 10px;}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#0a0f3a;border:1px solid var(--gold);color:#fff;padding:12px 18px;border-radius:12px;z-index:95;box-shadow:0 10px 30px rgba(0,0,0,.5);font-weight:600;}
+
+  /* phone controller */
+  .ctrl-page{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center;gap:18px;}
+  .ctrl-title{font-family:"Anton",sans-serif;color:var(--gold);font-size:44px;line-height:.9;text-shadow:0 4px 0 #7a5a23;}
+  .ctrl-status{font-family:system-ui,sans-serif;font-size:16px;color:#cdd3ff;min-height:24px;}
+  .ctrl-buzz{width:min(78vw,320px);height:min(78vw,320px);border-radius:50%;font-family:"Anton",sans-serif;font-size:clamp(40px,12vw,64px);text-transform:uppercase;color:#241a06;background:radial-gradient(circle at 35% 30%,#ffd98a,var(--gold) 70%);border:6px solid #b9863a;box-shadow:0 14px 40px rgba(0,0,0,.5),inset 0 -8px 18px rgba(0,0,0,.18);transition:transform .08s ease,filter .12s ease;}
+  .ctrl-buzz:active{transform:scale(.96);}
+  .ctrl-buzz:disabled{background:radial-gradient(circle at 35% 30%,#3a4170,#262c52 70%);color:#7c84b8;border-color:#333a66;box-shadow:none;cursor:not-allowed;}
+  .ctrl-buzz.in{background:radial-gradient(circle at 35% 30%,#7ef0c0,var(--good) 70%);color:#04231a;border-color:#0f6347;}
+  .ctrl-name{font-weight:700;font-size:20px;}
+  .ctrl-score{font-family:"Anton",sans-serif;font-size:30px;color:var(--gold);}
+
+  @media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}
+  @media (max-width:620px){.brand .tag{display:none;}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<input type="file" id="importFile" accept="application/json,.json" style="display:none">
+
+<script>
+/* =======================================================================
+   JEOPARDY NIGHT  -  build games, play in person, buzz in from phones.
+   Single file. The board screen is the host; phones join as buzzers.
+   ======================================================================= */
+
+const VALUES = { 0:[200,400,600,800,1000], 1:[400,800,1200,1600,2000] };
+const ROUND_NAMES = ["Jeopardy","Double Jeopardy"];
+const BUZZ_KEYS = ["1","2","3","4","5","6"]; // host keyboard buzz keys per player
+
+/* tiny self-contained image for the sample (Japanese flag), so it always renders */
+const SAMPLE_FLAG = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2090%2060%27%3E%3Crect%20width%3D%2790%27%20height%3D%2760%27%20fill%3D%27%23ffffff%27/%3E%3Ccircle%20cx%3D%2745%27%20cy%3D%2730%27%20r%3D%2718%27%20fill%3D%27%23bc002d%27/%3E%3C/svg%3E";
+
+/* ---------- sample game ---------- */
+function sampleGame(){
+  const mk = (clue, answer, dd=false, mediaType="none", media="") => ({clue, answer, dailyDouble:dd, mediaType, media});
+  return {
+    title:"Sample Game Night",
+    rounds:[
+      { categories:[
+        { title:"World Capitals", clues:[
+          mk("This canal-laced city is the capital of the Netherlands.","What is Amsterdam?"),
+          mk("Japan's capital, it was once known as Edo.","What is Tokyo?"),
+          mk("This Australian capital was purpose-built between Sydney and Melbourne.","What is Canberra?"),
+          mk("The capital of Canada sits on the Ottawa River in Ontario.","What is Ottawa?"),
+          mk("This East African capital's name comes from a Maasai phrase for cool waters.","What is Nairobi?"),
+        ]},
+        { title:"Science 101", clues:[
+          mk("H2O is the chemical formula for this everyday substance.","What is water?"),
+          mk("This force pulls objects toward the center of the Earth.","What is gravity?"),
+          mk("Plants turn sunlight into food through this process.","What is photosynthesis?"),
+          mk("This gas, symbol O, makes up about 21% of the air we breathe.","What is oxygen?"),
+          mk("This scientist published the theory of general relativity in 1915.","Who is Albert Einstein?"),
+        ]},
+        { title:"Movie Classics", clues:[
+          mk("In this 1939 film, Dorothy follows a yellow brick road.","What is The Wizard of Oz?"),
+          mk("\"Here's looking at you, kid\" comes from this 1942 film set in Morocco.","What is Casablanca?"),
+          mk("This 1972 crime epic opens at a wedding and stars Marlon Brando.","What is The Godfather?", true),
+          mk("A great white shark terrorizes a beach town in this 1975 Spielberg hit.","What is Jaws?"),
+          mk("This 1994 film follows a man with a box of chocolates and a remarkable life.","What is Forrest Gump?"),
+        ]},
+        { title:"Food and Drink", clues:[
+          mk("This Italian dish is a flat bread topped with sauce and cheese.","What is pizza?"),
+          mk("Sushi is traditionally served with this green, spicy paste.","What is wasabi?"),
+          mk("This Korean side dish is made from fermented, seasoned cabbage.","What is kimchi?"),
+          mk("Espresso topped with steamed, foamed milk is called this.","What is a cappuccino?"),
+          mk("This Florentine steak, cut across the loin, includes a T-shaped bone.","What is a T-bone?"),
+        ]},
+        { title:"Sports", clues:[
+          mk("This racquet sport is played at Wimbledon.","What is tennis?"),
+          mk("A hat trick means scoring three of these in a single game.","What are goals?"),
+          mk("This many players from one team are on the field in soccer.","What is eleven?"),
+          mk("The Tour de France is a famous race in this sport.","What is cycling?"),
+          mk("This Japanese martial art, meaning gentle way, is an Olympic event.","What is judo?"),
+        ]},
+        { title:"Word Origins", clues:[
+          mk("The word robot comes from a Czech word for this kind of labor.","What is forced labor?"),
+          mk("Salary comes from the Latin for this seasoning, once used as pay.","What is salt?"),
+          mk("This snack's name comes from the Dutch koekje, meaning little cake.","What is a cookie?"),
+          mk("An avatar originally meant the descent of a deity in this religion.","What is Hinduism?"),
+          mk("Quarantine comes from the Italian for this number of days.","What is forty?"),
+        ]},
+      ]},
+      { categories:[
+        { title:"History", clues:[
+          mk("This wall fell in 1989, reuniting a divided German city.","What is the Berlin Wall?"),
+          mk("This Egyptian queen allied with both Julius Caesar and Mark Antony.","Who is Cleopatra?"),
+          mk("This 1215 English charter limited the power of the king.","What is the Magna Carta?", true),
+          mk("This explorer reached the Americas in 1492 under the Spanish flag.","Who is Christopher Columbus?"),
+          mk("Of the seven ancient wonders, this Egyptian one still largely stands.","What is the Great Pyramid of Giza?"),
+        ]},
+        { title:"Flags and Places", clues:[
+          mk("Name the country whose national flag is shown here.","What is Japan?", false, "image", SAMPLE_FLAG),
+          mk("This Himalayan peak is the tallest mountain above sea level.","What is Mount Everest?"),
+          mk("This North African desert is the largest hot desert on Earth.","What is the Sahara?"),
+          mk("This walled enclave in Rome is the smallest country by area.","What is Vatican City?"),
+          mk("This narrow strait separates Spain from Morocco at the Atlantic.","What is the Strait of Gibraltar?"),
+        ]},
+        { title:"Music", clues:[
+          mk("This keyboard instrument has 88 keys.","What is the piano?"),
+          mk("This King of Pop released the best-selling album Thriller.","Who is Michael Jackson?"),
+          mk("This Liverpool quartet was John, Paul, George, and Ringo.","Who are The Beatles?"),
+          mk("In sheet music, this Italian term tells you to play loudly.","What is forte?"),
+          mk("This composer wrote nine symphonies while gradually going deaf.","Who is Ludwig van Beethoven?"),
+        ]},
+        { title:"Literature", clues:[
+          mk("This English playwright wrote Romeo and Juliet.","Who is William Shakespeare?"),
+          mk("This boy wizard attends Hogwarts in J.K. Rowling's series.","Who is Harry Potter?"),
+          mk("This Tolstoy novel follows Russian families during Napoleon's invasion.","What is War and Peace?"),
+          mk("This American author wrote The Old Man and the Sea.","Who is Ernest Hemingway?"),
+          mk("This epic poem by Homer follows Odysseus on his long journey home.","What is the Odyssey?", true),
+        ]},
+        { title:"Technology", clues:[
+          mk("This Cupertino company makes the iPhone.","What is Apple?"),
+          mk("In a web address, www stands for this.","What is the World Wide Web?"),
+          mk("This term describes a program built to mimic human conversation.","What is a chatbot?"),
+          mk("This Englishman invented the World Wide Web in 1989.","Who is Tim Berners-Lee?"),
+          mk("This unit of data is roughly one billion bytes.","What is a gigabyte?"),
+        ]},
+        { title:"Animal Kingdom", clues:[
+          mk("This is the largest living land animal.","What is the elephant?"),
+          mk("This flightless bird is the fastest runner on two legs.","What is the ostrich?"),
+          mk("This intelligent marine mammal uses echolocation; Flipper was one.","What is a dolphin?"),
+          mk("This is the only mammal capable of true, sustained flight.","What is a bat?"),
+          mk("This largest big cat sports orange fur with black stripes.","What is the tiger?"),
+        ]},
+      ]},
+    ],
+    final:{ category:"Famous Landmarks",
+      clue:"Completed in 1889 for a world's fair, this iron tower was meant to be temporary.",
+      answer:"What is the Eiffel Tower?", mediaType:"none", media:"" }
+  };
+}
+
+function blankGame(){
+  const round = (ri)=>({ categories:Array.from({length:6},()=>({
+    title:"", clues:VALUES[ri].map(()=>({clue:"",answer:"",dailyDouble:false,mediaType:"none",media:""}))
+  }))});
+  return { title:"Untitled Game", rounds:[round(0),round(1)], final:{category:"",clue:"",answer:"",mediaType:"none",media:""} };
+}
+
+/* =======================================================================
+   Storage (persistent when available; JSON export/import always works)
+   ======================================================================= */
+const Store = (function(){
+  const mem = {}; let memIndex = [];
+  const hasStorage = (typeof window!=="undefined") && window.storage && typeof window.storage.get==="function";
+  async function readIndex(){
+    if(!hasStorage) return memIndex.slice();
+    try{ const r=await window.storage.get("jeopardy:index"); return r&&r.value?JSON.parse(r.value):[]; }catch(e){ return []; }
+  }
+  async function writeIndex(idx){ if(!hasStorage){memIndex=idx.slice();return;} try{ await window.storage.set("jeopardy:index",JSON.stringify(idx)); }catch(e){} }
+  return {
+    available:hasStorage,
+    async list(){ const idx=await readIndex(); idx.sort((a,b)=>(b.updated||0)-(a.updated||0)); return idx; },
+    async save(id,game){
+      const now=Date.now();
+      if(hasStorage){ try{ await window.storage.set("jeopardy:game:"+id,JSON.stringify(game)); }catch(e){ throw e; } }
+      else mem[id]=JSON.parse(JSON.stringify(game));
+      const idx=await readIndex(); const f=idx.find(g=>g.id===id);
+      if(f){f.title=game.title;f.updated=now;} else idx.push({id,title:game.title,updated:now});
+      await writeIndex(idx);
+    },
+    async load(id){
+      if(hasStorage){ try{ const r=await window.storage.get("jeopardy:game:"+id); return r&&r.value?JSON.parse(r.value):null; }catch(e){ return null; } }
+      return mem[id]?JSON.parse(JSON.stringify(mem[id])):null;
+    },
+    async remove(id){
+      if(hasStorage){ try{ await window.storage.delete("jeopardy:game:"+id); }catch(e){} } else delete mem[id];
+      const idx=(await readIndex()).filter(g=>g.id!==id); await writeIndex(idx);
+    }
+  };
+})();
+
+/* =======================================================================
+   App state
+   ======================================================================= */
+const state = {
+  screen:"home", game:null, editId:null, editTab:0,
+  players:[], controlling:0, round:0,
+  clue:null, clueRevealed:false, ddStage:null, ddWager:0, lastCorrect:null,
+  buzz:{armed:false, winner:null, lockout:[]},
+  net:{on:false, code:null, status:"off", count:0, showModal:false},
+  finalStep:null, finalBase:[], finalWagers:[], finalOutcomes:[],
+  timer:null
+};
+
+const app = document.getElementById("app");
+const $ = (s,r=document)=>r.querySelector(s);
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+function money(n){ const neg=n<0; return (neg?"-$":"$")+Math.abs(n).toLocaleString(); }
+function show(screen){ state.screen=screen; render(); }
+let toastTimer=null;
+function toast(msg){ const o=$(".toast"); if(o)o.remove(); const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.remove(),2600); }
+
+/* =======================================================================
+   Render dispatcher
+   ======================================================================= */
+function render(){
+  stopTimer();
+  if(state.screen==="home") return renderHome();
+  if(state.screen==="editor") return renderEditor();
+  if(state.screen==="setup") return renderSetup();
+  if(state.screen==="board") return renderBoard();
+  if(state.screen==="clue") return renderClue();
+  if(state.screen==="final") return renderFinal();
+  if(state.screen==="gameover") return renderGameOver();
+}
+
+/* ---------- HOME ---------- */
+async function renderHome(){
+  app.innerHTML = `
+    <div class="home-hero">
+      <div class="big">JEOPARDY</div>
+      <div class="sub">Make your own. Play with friends.</div>
+      <div class="home-actions">
+        <button class="btn gold big" data-act="play-sample">Play sample game</button>
+        <button class="btn big" data-act="new-game">Make a new game</button>
+        <button class="btn ghost big" data-act="import">Import a game file</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:18px;">
+      <div class="spread"><h2 class="section">Your saved games</h2>
+        <span class="muted ui" style="font-size:12px;">${Store.available?"Saved in this browser":"Saving is off here; use Import / Export to keep games"}</span></div>
+      <div id="gamesList" class="games-list"><div class="muted ui">Loading...</div></div>
+    </div>
+    <div class="how">
+      <div class="step"><b>1. Build a board</b><br>Six categories per round, two rounds, plus a Final. Add image or audio clues and mark Daily Doubles.</div>
+      <div class="step"><b>2. Add players and buzzers</b><br>One to six players. Buzz in from phones, the keyboard, or on-screen buttons.</div>
+      <div class="step"><b>3. Host the game</b><br>Pick a clue, read it aloud, take the first buzz, reveal the answer, then score it.</div>
+    </div>`;
+  const list=$("#gamesList"); const games=await Store.list();
+  if(!games.length){ list.innerHTML=`<div class="muted ui">No saved games yet. Make one, or play the sample to see how it works.</div>`; }
+  else list.innerHTML=games.map(g=>`
+    <div class="game-item">
+      <div><div class="gname">${esc(g.title||"Untitled")}</div><div class="gmeta ui">Updated ${new Date(g.updated||Date.now()).toLocaleString()}</div></div>
+      <div class="row" style="gap:8px;">
+        <button class="btn gold sm" data-act="play-saved" data-id="${g.id}">Play</button>
+        <button class="btn ghost sm" data-act="edit-saved" data-id="${g.id}">Edit</button>
+        <button class="btn ghost sm" data-act="export-saved" data-id="${g.id}">Export</button>
+        <button class="btn bad sm" data-act="del-saved" data-id="${g.id}">Delete</button>
+      </div>
+    </div>`).join("");
+}
+
+/* ---------- EDITOR ---------- */
+function renderEditor(){
+  const g=state.game, tab=state.editTab;
+  app.innerHTML = `
+    <div class="topbar">
+      <div class="brand"><h1>EDIT</h1><span class="tag">build your board</span></div>
+      <div class="row">
+        <button class="btn ghost" data-act="ed-home">Back</button>
+        <button class="btn" data-act="ed-export">Export file</button>
+        <button class="btn gold" data-act="ed-save">Save game</button>
+        <button class="btn good" data-act="ed-play">Save and play</button>
+      </div>
+    </div>
+    <label class="field ui" style="max-width:520px;"><span>Game title</span>
+      <input class="txt" type="text" data-bind="title" value="${esc(g.title)}" placeholder="Name your game"></label>
+    <div class="ed-tabs ui">
+      <button class="${tab===0?"active":""}" data-act="ed-tab" data-tab="0">Jeopardy round</button>
+      <button class="${tab===1?"active":""}" data-act="ed-tab" data-tab="1">Double Jeopardy</button>
+      <button class="${tab===2?"active":""}" data-act="ed-tab" data-tab="2">Final Jeopardy</button>
+    </div>
+    <div id="edBody"></div>`;
+  renderEditorBody();
+}
+function mediaControls(prefix, attrs, mediaType, media){
+  // prefix used only for ids; attrs is the data-* string identifying the target
+  const isImg = mediaType==="image", isAud = mediaType==="audio";
+  let preview = "";
+  if(media && isImg) preview = `<div class="media-preview"><img src="${esc(media)}" alt="clue image preview"></div>`;
+  else if(media && isAud) preview = `<div class="media-preview"><audio controls src="${esc(media)}"></audio></div>`;
+  return `
+    <div class="media-row ui">
+      <select data-mtype ${attrs}>
+        <option value="none" ${mediaType==="none"?"selected":""}>No media</option>
+        <option value="image" ${isImg?"selected":""}>Image</option>
+        <option value="audio" ${isAud?"selected":""}>Audio</option>
+      </select>
+      ${mediaType!=="none"?`
+        <input class="txt media-url" type="text" data-murl ${attrs} value="${esc(media)}" placeholder="${isImg?"Image URL (https://...)":"Audio URL (https://...)"}">
+        <button class="btn ghost sm" data-act="media-upload" ${attrs}>Upload</button>
+        ${media?`<button class="btn ghost sm" data-act="media-clear" ${attrs}>Clear</button>`:""}
+      `:""}
+    </div>
+    ${preview}`;
+}
+function renderEditorBody(){
+  const g=state.game, tab=state.editTab, body=$("#edBody");
+  if(tab===2){
+    const f=g.final;
+    body.innerHTML = `
+      <div class="card ui" style="max-width:760px;">
+        <h2 class="section">Final Jeopardy</h2>
+        <p class="muted" style="margin-top:-6px;">One last clue. Players see the category, lock in a secret wager, then answer.</p>
+        <label class="field"><span>Category</span>
+          <input class="txt" type="text" data-final="category" value="${esc(f.category)}" placeholder="e.g. Famous Landmarks"></label>
+        <label class="field"><span>Clue (what the host reads aloud)</span>
+          <textarea class="txt" data-final="clue" placeholder="Write the clue here">${esc(f.clue)}</textarea></label>
+        <span class="ui" style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Optional media</span>
+        ${mediaControls("final", 'data-final-media="1"', f.mediaType||"none", f.media||"")}
+        <label class="field" style="margin-top:8px;"><span>Correct response (in the form of a question)</span>
+          <input class="txt" type="text" data-final="answer" value="${esc(f.answer)}" placeholder="What is ...?"></label>
+      </div>`;
+    return;
+  }
+  const ri=tab, cats=g.rounds[ri].categories;
+  body.innerHTML = `
+    <div class="cats-grid ui">
+      ${cats.map((cat,ci)=>`
+        <div class="catbox">
+          <label class="field"><span>Category ${ci+1}</span>
+            <input class="txt" type="text" data-cat-title data-r="${ri}" data-c="${ci}" value="${esc(cat.title)}" placeholder="Category name"></label>
+          ${cat.clues.map((clue,ii)=>{
+            const val=VALUES[ri][ii];
+            const attrs=`data-r="${ri}" data-c="${ci}" data-i="${ii}"`;
+            return `
+            <div class="cluebox">
+              <div class="vrow">
+                <span class="val">$${val}</span>
+                <label class="ddtoggle ${clue.dailyDouble?"on":""}" data-ddlabel ${attrs}>
+                  <input type="checkbox" data-dd ${attrs} ${clue.dailyDouble?"checked":""}> Daily Double</label>
+              </div>
+              <label class="field"><span>Clue</span>
+                <textarea class="txt" data-clue ${attrs} data-field="clue" placeholder="Write the clue">${esc(clue.clue)}</textarea></label>
+              ${mediaControls("c", attrs, clue.mediaType||"none", clue.media||"")}
+              <label class="field" style="margin-top:8px;margin-bottom:2px;"><span>Response (form of a question)</span>
+                <input class="txt" type="text" data-clue ${attrs} data-field="answer" value="${esc(clue.answer)}" placeholder="What is ...?"></label>
+            </div>`;
+          }).join("")}
+        </div>`).join("")}
+    </div>`;
+}
+
+/* ---------- SETUP ---------- */
+function renderSetup(){
+  const g=state.game;
+  if(!state.players.length) state.players=[{name:"Player 1",score:0},{name:"Player 2",score:0}];
+  app.innerHTML = `
+    <div class="topbar">
+      <div class="brand"><h1>PLAYERS</h1><span class="tag">${esc(g.title)}</span></div>
+      <button class="btn ghost" data-act="setup-home">Back</button>
+    </div>
+    <div class="card ui" style="max-width:620px;">
+      <h2 class="section">Who is playing?</h2>
+      <p class="muted" style="margin-top:-6px;">Add one to six players or teams. Each gets a buzz key on the host keyboard. Phones can also join once the game starts.</p>
+      <div class="players-edit" id="peList"></div>
+      <div class="row" style="margin-top:14px;"><button class="btn ghost sm" data-act="add-player">Add player</button></div>
+      <div class="row" style="margin-top:18px;"><button class="btn gold big" data-act="start-game">Start game</button></div>
+    </div>`;
+  renderPlayerInputs();
+}
+function renderPlayerInputs(){
+  $("#peList").innerHTML = state.players.map((p,i)=>`
+    <div class="pe-row">
+      <span class="num">${i+1}</span>
+      <input class="txt" type="text" data-pname data-i="${i}" value="${esc(p.name)}" placeholder="Name">
+      <span class="keyhint">buzz key: <b>${BUZZ_KEYS[i]||"-"}</b></span>
+      ${state.players.length>1?`<button class="btn bad sm" data-act="rm-player" data-i="${i}">Remove</button>`:""}
+    </div>`).join("");
+}
+
+/* ---------- BOARD ---------- */
+function renderBoard(){
+  const g=state.game, ri=state.round, cats=g.rounds[ri].categories;
+  const remaining=countRemaining(ri);
+  const nextLabel = ri===0?"Go to Double Jeopardy":"Go to Final Jeopardy";
+  const net=state.net;
+  const netDot = net.status==="on"?"on":net.status==="connecting"?"wait":"off";
+  const netText = net.status==="on"?`Phone buzzers on - ${net.count} connected` : net.status==="connecting"?"Phone buzzers connecting..." : "Phone buzzers off";
+  app.innerHTML = `
+    <div class="board-head">
+      <div class="brand"><h1 style="font-size:34px;">JEOPARDY</h1></div>
+      <div class="row" style="align-items:center;">
+        <span class="round-chip">${ROUND_NAMES[ri]} round</span>
+        <button class="net-chip" data-act="open-room"><span class="dot ${netDot}"></span>${netText}</button>
+        <button class="btn ghost sm" data-act="quit">Quit</button>
+        <button class="btn gold sm" data-act="next-round">${nextLabel}</button>
+      </div>
+    </div>
+    <div class="board-scroll">
+      <div class="board">
+        ${cats.map(c=>`<div class="cat-cell">${esc(c.title||"\u00A0")}</div>`).join("")}
+        ${VALUES[ri].map((val,ii)=>cats.map((cat,ci)=>{
+          const clue=cat.clues[ii]; const done=clue.answered;
+          const has=(clue.clue||"").trim()||(clue.answer||"").trim()||(clue.media||"").trim();
+          if(done||!has) return `<div class="clue-cell done"></div>`;
+          const mtag = clue.mediaType==="image"?`<span class="mtag">image</span>`:clue.mediaType==="audio"?`<span class="mtag">audio</span>`:"";
+          return `<div class="clue-cell" data-act="open-clue" data-r="${ri}" data-c="${ci}" data-i="${ii}">$${val}${mtag}</div>`;
+        }).join("")).join("")}
+      </div>
+    </div>
+    <div class="board-foot">
+      <div class="spread"><h2 class="section" style="margin:0;">Scores</h2>
+        <span class="muted ui" style="font-size:12px;">${remaining} clue${remaining===1?"":"s"} left this round. Tap a name to give board control.</span></div>
+      <div class="scores" id="scores"></div>
+    </div>
+    ${net.showModal?roomModal():""}`;
+  renderScores();
+  if(net.showModal) mountQR();
+}
+function renderScores(){
+  const box=$("#scores"); if(!box) return;
+  box.innerHTML = state.players.map((p,i)=>`
+    <div class="pcard ${i===state.controlling?"control":""}" data-act="give-control" data-i="${i}">
+      ${i===state.controlling?`<span class="ctrl-tag">control</span>`:""}
+      <div class="mini"><button data-act="score-minus" data-i="${i}" title="Subtract 100">-</button><button data-act="score-plus" data-i="${i}" title="Add 100">+</button></div>
+      <div class="pname">${esc(p.name)}</div>
+      <div class="pscore ${p.score<0?"neg":""}">${money(p.score)}</div>
+      <div class="ptag">key ${BUZZ_KEYS[i]||"-"}${p.phone?" &middot; phone":""}${p.connected===false?" &middot; offline":""}</div>
+    </div>`).join("");
+}
+function countRemaining(ri){
+  let n=0; state.game.rounds[ri].categories.forEach(cat=>cat.clues.forEach(c=>{
+    const has=(c.clue||"").trim()||(c.answer||"").trim()||(c.media||"").trim(); if(has&&!c.answered)n++; })); return n;
+}
+
+/* ---------- ROOM MODAL (phone buzzers) ---------- */
+function roomModal(){
+  const net=state.net;
+  const isFile = location.protocol==="file:";
+  const noLib = (typeof Peer==="undefined");
+  let inner;
+  if(isFile){
+    inner = `
+      <h2 class="section">Phone buzzers need a web address</h2>
+      <p class="ui" style="color:#cdd3ff;line-height:1.5;">This file is open from your computer (a <b>file://</b> link), and phone browsers block buzzer connections on local files.
+      To use phones, put <b>jeopardy.html</b> on any free static host that gives an <b>https</b> link, for example GitHub Pages, Netlify, or Cloudflare Pages, then open that link here and on the phones.</p>
+      <p class="ui" style="color:#cdd3ff;">In the meantime, the <b>keyboard keys</b> (1 to ${state.players.length}) and the <b>on-screen buzz buttons</b> work right now.</p>
+      <div class="center" style="margin-top:14px;"><button class="btn gold" data-act="close-room">Got it</button></div>`;
+  } else if(noLib){
+    inner = `
+      <h2 class="section">Buzzer library did not load</h2>
+      <p class="ui" style="color:#cdd3ff;">The phone-connection library could not load (no internet, or it was blocked). Keyboard and on-screen buzzers still work.</p>
+      <div class="center" style="margin-top:14px;"><button class="btn gold" data-act="close-room">Close</button></div>`;
+  } else {
+    const url = joinURL(net.code||"");
+    inner = `
+      <h2 class="section">Buzz in from your phone</h2>
+      <p class="ui" style="color:#cdd3ff;margin-top:-6px;">Players scan this code (or open the link), type a name, and tap Buzz. Best on the same Wi-Fi as this screen.</p>
+      <div class="qr-wrap">
+        <div id="qrbox">${net.status!=="on"?"<span class='ui' style='color:#333'>...</span>":""}</div>
+        <div style="flex:1;min-width:200px;">
+          <div class="ui" style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Room code</div>
+          <div class="roomcode">${esc(net.code||"....")}</div>
+          <div class="joinurl">${esc(url)}</div>
+          <div class="ui" style="margin-top:8px;font-size:13px;color:${net.status==="on"?"var(--good)":"var(--gold-bright)"};">
+            ${net.status==="on"?("Ready - "+net.count+" phone"+(net.count===1?"":"s")+" connected") : net.status==="connecting"?"Connecting to the buzzer service..." : net.status==="error"?"Could not start. Try again, or use keyboard buzzers." : ""}
+          </div>
+        </div>
+      </div>
+      <div class="conn-list">
+        ${state.players.filter(p=>p.phone).map(p=>`<div class="conn-item"><span class="dot ${p.connected===false?"off":"on"}"></span>${esc(p.name)}${p.connected===false?" (offline)":""}</div>`).join("") || `<div class="ui muted" style="font-size:13px;">No phones connected yet.</div>`}
+      </div>
+      <div class="center" style="margin-top:16px;">
+        ${net.status==="error"?`<button class="btn gold" data-act="retry-room">Try again</button>`:""}
+        <button class="btn ghost" data-act="close-room">Close</button>
+      </div>`;
+  }
+  return `<div class="modal" data-act="close-room-bg"><div class="modal-card ui" data-stop="1">${inner}</div></div>`;
+}
+function mountQR(){
+  const box=$("#qrbox"); if(!box) return;
+  if(typeof QRCode==="undefined" || !state.net.code || state.net.status!=="on") return;
+  box.innerHTML="";
+  try{ new QRCode(box,{text:joinURL(state.net.code),width:180,height:180,colorDark:"#06051c",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M}); }
+  catch(e){ box.innerHTML=`<span class="ui" style="color:#333;font-size:12px;padding:8px;">Use the link below</span>`; }
+}
+function joinURL(code){ return location.origin + location.pathname + "#join=" + code; }
+
+/* ---------- CLUE OVERLAY ---------- */
+function renderClue(){
+  const {ri,ci,ii}=state.clue;
+  const clue=state.game.rounds[ri].categories[ci].clues[ii];
+  const cat=state.game.rounds[ri].categories[ci].title||"";
+  const val=VALUES[ri][ii];
+
+  if(clue.dailyDouble && state.ddStage){
+    if(state.ddStage==="splash"){
+      app.innerHTML = `
+        <div class="overlay dd">
+          <div class="ov-top"><span class="where">${esc(cat)}</span><span class="val">Daily Double</span></div>
+          <div class="ov-body"><div class="dd-splash">DAILY DOUBLE!</div>
+            <div class="muted ui" style="font-size:18px;">${esc(controllingName())} found it. Only they may answer.</div></div>
+          <div class="ov-foot"><div class="center"><button class="btn gold big" data-act="dd-to-wager">Make a wager</button></div></div>
+        </div>`;
+      return;
+    }
+    if(state.ddStage==="wager"){
+      const max=Math.max(state.players[state.controlling].score, VALUES[ri][VALUES[ri].length-1]);
+      app.innerHTML = `
+        <div class="overlay dd">
+          <div class="ov-top"><span class="where">${esc(cat)} - Daily Double</span><span class="val"></span></div>
+          <div class="ov-body">
+            <div class="clue-text" style="font-size:clamp(24px,4vw,42px);">${esc(controllingName())}, how much do you wager?</div>
+            <div class="ui" style="display:flex;flex-direction:column;gap:8px;align-items:center;">
+              <input class="txt" id="ddWagerInput" type="number" min="0" max="${max}" value="${val}" style="width:220px;font-size:26px;text-align:center;font-family:'Anton',sans-serif;color:var(--gold);">
+              <div class="muted" style="font-size:13px;">Up to ${money(max)} (your score or the top clue value).</div>
+            </div>
+          </div>
+          <div class="ov-foot"><div class="center"><button class="btn gold big" data-act="dd-confirm-wager" data-max="${max}">Reveal the clue</button></div></div>
+        </div>`;
+      setTimeout(()=>{const el=$("#ddWagerInput"); if(el){el.focus();el.select();}},30);
+      return;
+    }
+  }
+
+  const isDD = clue.dailyDouble && state.ddStage==="play";
+  const revealed = state.clueRevealed;
+  const mediaHTML = clueMediaHTML(clue);
+  const winner = state.buzz.winner;
+
+  // footer content depends on phase
+  let foot;
+  if(isDD){
+    foot = revealed
+      ? `<div class="judge">${judgeRowsDD(val)}</div><div class="center"><button class="btn good big" data-act="close-clue">Back to board</button></div>`
+      : `<div class="center"><button class="btn ghost" data-act="timer-toggle">Start 30s timer</button><button class="btn gold big" data-act="reveal">Reveal answer</button></div>`;
+  } else if(revealed){
+    foot = `<div class="judge">${judgeRowsAll(val)}</div><div class="center"><button class="btn good big" data-act="close-clue">Back to board</button></div>`;
+  } else if(winner===null){
+    // armed, waiting for a buzz
+    foot = `
+      <div class="center"><div class="buzz-status armed">Buzzers armed - first to buzz is in</div></div>
+      <div class="buzz-players">
+        ${state.players.map((p,i)=> state.buzz.lockout.includes(i)
+          ? `<button class="buzzbtn out" disabled>${esc(p.name)} <span class="khint">out</span></button>`
+          : `<button class="buzzbtn" data-act="buzz" data-i="${i}">${esc(p.name)} <span class="khint">key ${BUZZ_KEYS[i]||"-"}</span></button>`
+        ).join("")}
+      </div>
+      <div class="center"><button class="btn ghost" data-act="timer-toggle">Start 30s timer</button><button class="btn ghost" data-act="reveal">No one buzzed - reveal answer</button></div>`;
+  } else {
+    // someone buzzed in, not yet revealed
+    const p=state.players[winner];
+    foot = `
+      <div class="center"><div class="buzz-winner">${esc(p.name)} is in!</div></div>
+      <div class="center">
+        <button class="btn good" data-act="buzz-correct" data-i="${winner}" data-amt="${val}">Correct +${money(val)}</button>
+        <button class="btn bad" data-act="buzz-wrong" data-i="${winner}" data-amt="${val}">Wrong -${money(val)}</button>
+        <button class="btn gold" data-act="reveal">Reveal answer</button>
+      </div>`;
+  }
+
+  app.innerHTML = `
+    <div class="overlay ${isDD?"dd":""}">
+      <div class="ov-top"><span class="where">${esc(cat)}</span><span class="val">${isDD?("Wager "+money(state.ddWager)):money(val)}</span></div>
+      <div class="ov-body">
+        ${mediaHTML}
+        <div class="clue-text">${esc(clue.clue||"")}</div>
+        ${revealed?`<div class="answer-text">${esc(clue.answer||"(no response written)")}</div>`:`<div id="timerSlot"></div>`}
+      </div>
+      <div class="ov-foot">${foot}</div>
+    </div>`;
+}
+function clueMediaHTML(clue){
+  if(clue.mediaType==="image" && clue.media){
+    return `<img class="clue-media" src="${esc(clue.media)}" alt="clue image" onerror="this.outerHTML='<div class=\\'media-fail\\'>Image could not load. Check the URL.</div>'">`;
+  }
+  if(clue.mediaType==="audio" && clue.media){
+    return `<audio class="clue-audio" controls src="${esc(clue.media)}"></audio>`;
+  }
+  return "";
+}
+function judgeRowsAll(val){
+  return state.players.map((p,i)=>`
+    <div class="jrow"><span class="jn">${esc(p.name)} &middot; ${money(p.score)}</span>
+      <span class="jb">
+        <button class="btn good sm" data-act="judge" data-i="${i}" data-correct="1" data-amt="${val}">+${money(val)}</button>
+        <button class="btn bad sm" data-act="judge" data-i="${i}" data-correct="0" data-amt="${val}">-${money(val)}</button>
+      </span></div>`).join("");
+}
+function judgeRowsDD(val){
+  const i=state.controlling, p=state.players[i];
+  return `<div class="jrow"><span class="jn">${esc(p.name)} &middot; ${money(p.score)}</span>
+    <span class="jb">
+      <button class="btn good sm" data-act="judge" data-i="${i}" data-correct="1" data-amt="${state.ddWager}">Correct +${money(state.ddWager)}</button>
+      <button class="btn bad sm" data-act="judge" data-i="${i}" data-correct="0" data-amt="${state.ddWager}">Wrong -${money(state.ddWager)}</button>
+    </span></div>`;
+}
+function controllingName(){ return state.players[state.controlling]?state.players[state.controlling].name:"The leader"; }
+
+/* ---------- FINAL ---------- */
+function renderFinal(){
+  const f=state.game.final, step=state.finalStep;
+  if(step==="category"){
+    app.innerHTML = wrapFinal(`
+      <div class="muted ui" style="letter-spacing:4px;text-transform:uppercase;">Final Jeopardy</div>
+      <div class="final-cat">${esc(f.category||"Final Category")}</div>
+      <p class="ui" style="font-size:17px;color:#cdd3ff;">Everyone still in the game looks at the category and decides a secret wager. Write wagers down, then the host enters them.</p>
+      <div class="center" style="margin-top:18px;"><button class="btn gold big" data-act="final-to-wager">Enter wagers</button></div>`);
+    return;
+  }
+  if(step==="wager"){
+    app.innerHTML = wrapFinal(`
+      <div class="final-cat" style="font-size:clamp(24px,5vw,44px);">${esc(f.category||"Final Category")}</div>
+      <p class="ui muted">Type each player's secret wager. Max is their current score (or 0 if not positive).</p>
+      <div class="wager-grid">
+        ${state.players.map((p,i)=>{ const max=Math.max(0,p.score); return `
+          <div class="wbox ui"><div class="wn">${esc(p.name)}</div><div class="wmax">${money(p.score)} available</div>
+            <input class="txt" type="number" min="0" max="${max}" value="${state.finalWagers[i]||0}" data-fwager data-i="${i}" data-max="${max}" ${max<=0?"disabled":""} style="font-family:'Anton',sans-serif;color:var(--gold);font-size:20px;text-align:center;"></div>`; }).join("")}
+      </div>
+      <div class="center" style="margin-top:18px;"><button class="btn gold big" data-act="final-reveal-clue">Lock wagers and show clue</button></div>`);
+    return;
+  }
+  if(step==="clue"){
+    app.innerHTML = `
+      <div class="overlay">
+        <div class="ov-top"><span class="where">Final Jeopardy - ${esc(f.category)}</span><span class="val"></span></div>
+        <div class="ov-body">${clueMediaHTML(f)}<div class="clue-text">${esc(f.clue||"(no clue written)")}</div><div id="timerSlot"></div></div>
+        <div class="ov-foot"><div class="center"><button class="btn ghost" data-act="timer-toggle">Start 30s timer</button><button class="btn gold big" data-act="final-to-reveal">Reveal answer</button></div></div>
+      </div>`;
+    return;
+  }
+  if(step==="reveal"){
+    app.innerHTML = `
+      <div class="overlay">
+        <div class="ov-top"><span class="where">Final Jeopardy - ${esc(f.category)}</span><span class="val"></span></div>
+        <div class="ov-body">${clueMediaHTML(f)}<div class="clue-text" style="font-size:clamp(22px,4vw,42px);">${esc(f.clue||"")}</div><div class="answer-text">${esc(f.answer||"(no response written)")}</div></div>
+        <div class="ov-foot">
+          <div class="judge">
+            ${state.players.map((p,i)=>{ const w=state.finalWagers[i]||0; const oc=state.finalOutcomes[i];
+              const live=state.finalBase[i]+(oc==="correct"?w:oc==="wrong"?-w:0);
+              return `<div class="jrow"><span class="jn">${esc(p.name)} &middot; bet ${money(w)} &middot; <b style="color:var(--gold)">${money(live)}</b></span>
+                <span class="jb"><button class="btn ${oc==="correct"?"good":"ghost"} sm" data-act="final-judge" data-i="${i}" data-oc="correct">Right</button>
+                <button class="btn ${oc==="wrong"?"bad":"ghost"} sm" data-act="final-judge" data-i="${i}" data-oc="wrong">Wrong</button></span></div>`; }).join("")}
+          </div>
+          <div class="center"><button class="btn gold big" data-act="final-results">See final results</button></div>
+        </div>
+      </div>`;
+    return;
+  }
+}
+function wrapFinal(inner){
+  return `<div class="topbar"><div class="brand"><h1 style="font-size:30px;">FINAL</h1></div><button class="btn ghost sm" data-act="quit">Quit</button></div>
+    <div class="card"><div class="final-wrap">${inner}</div></div>`;
+}
+
+/* ---------- GAME OVER ---------- */
+function renderGameOver(){
+  const ranked=state.players.map((p,i)=>({...p,i})).sort((a,b)=>b.score-a.score);
+  const top=ranked[0];
+  const tie = ranked.filter(p=>p.score===top.score).length>1;
+  let banner;
+  if(top.score<=0) banner="No winner this time";
+  else if(tie) banner="It's a tie!";
+  else banner=esc(top.name)+" wins!";
+  app.innerHTML = `
+    <div class="topbar"><div class="brand"><h1>RESULTS</h1></div></div>
+    <div class="card"><div class="final-wrap">
+      <div class="winner-banner">${banner}</div>
+      <table class="results-table ui"><thead><tr><th>#</th><th>Player</th><th style="text-align:right;">Final score</th></tr></thead>
+        <tbody>${ranked.map((p,r)=>`<tr><td>${r+1}</td><td>${esc(p.name)}</td><td class="score" style="text-align:right;${p.score<0?"color:var(--bad)":""}">${money(p.score)}</td></tr>`).join("")}</tbody></table>
+      <div class="center" style="margin-top:20px;"><button class="btn gold big" data-act="play-again">Play this game again</button><button class="btn ghost big" data-act="quit">Home</button></div>
+    </div></div>`;
+}
+
+/* =======================================================================
+   Timer + sounds (neutral; not the show tune)
+   ======================================================================= */
+function startTimer(seconds){
+  stopTimer(); const slot=$("#timerSlot"); if(!slot) return;
+  slot.innerHTML=`<div class="timer ui"><span id="tnum">${seconds}</span><div class="bar"><div class="fill" id="tfill" style="width:100%"></div></div></div>`;
+  let left=seconds; const fill=$("#tfill"), num=$("#tnum");
+  state.timer=setInterval(()=>{ left--; if(num)num.textContent=Math.max(0,left);
+    if(fill){fill.style.width=Math.max(0,(left/seconds)*100)+"%"; if(left<=10)fill.classList.add("low");}
+    if(left<=0){stopTimer();tone(660,0.5);} },1000);
+}
+function stopTimer(){ if(state.timer){clearInterval(state.timer);state.timer=null;} }
+function tone(freq,dur){
+  try{ const C=window.AudioContext||window.webkitAudioContext; if(!C) return; const ctx=new C();
+    const o=ctx.createOscillator(), g=ctx.createGain(); o.type="sine"; o.frequency.value=freq; o.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.0001,ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.25,ctx.currentTime+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+dur); o.start(); o.stop(ctx.currentTime+dur+0.02);
+  }catch(e){}
+}
+function buzzSound(){ tone(880,0.18); }
+
+/* =======================================================================
+   Buzz logic (shared by phone, keyboard, on-screen)
+   ======================================================================= */
+function armBuzzers(){ state.buzz={armed:true,winner:null,lockout:[]}; broadcastBuzz(); }
+function idleBuzzers(){ state.buzz={armed:false,winner:null,lockout:[]}; broadcastBuzz(); }
+function buzzIn(i, source){
+  if(state.screen!=="clue" || state.clueRevealed) return;
+  if(!state.buzz.armed || state.buzz.winner!==null) return;
+  if(i<0 || i>=state.players.length) return;
+  if(state.buzz.lockout.includes(i)) return;
+  state.buzz.winner=i; state.buzz.armed=false;
+  buzzSound(); broadcastBuzz(); renderClue();
+}
+function buzzWrong(i, amt){
+  state.players[i].score -= amt;
+  if(!state.buzz.lockout.includes(i)) state.buzz.lockout.push(i);
+  state.buzz.winner=null; state.buzz.armed=true; broadcastBuzz(); renderClue();
+}
+function buzzCorrect(i, amt){
+  state.players[i].score += amt; state.lastCorrect=i;
+  state.buzz.armed=false; state.clueRevealed=true; idleBuzzers(); renderClue();
+}
+function broadcastBuzz(){
+  if(!state.net.on) return;
+  const w=state.buzz.winner;
+  Net.broadcast({type:"buzzstate",
+    mode: state.screen==="clue" && !state.clueRevealed && state.buzz.armed ? "armed" : (w!==null?"locked":"idle"),
+    winner: w, winnerName: w!==null && state.players[w] ? state.players[w].name : "",
+    lockout: state.buzz.lockout.slice()
+  });
+  pushScoresToPhones();
+}
+
+/* =======================================================================
+   Networking: PeerJS host + phone controller
+   ======================================================================= */
+const Net = {
+  peer:null, conns:{}, isHost:false,
+  broadcast(msg){ Object.values(this.conns).forEach(c=>{ try{ if(c&&c.open) c.send(msg); }catch(e){} }); },
+  stop(){ try{ Object.values(this.conns).forEach(c=>{try{c.close();}catch(e){}}); if(this.peer) this.peer.destroy(); }catch(e){} this.peer=null; this.conns={}; },
+  hostStart(){
+    if(typeof Peer==="undefined"){ state.net.status="error"; renderIfBoard(); return; }
+    state.net.status="connecting"; renderIfBoard();
+    let tries=0;
+    const attempt=()=>{
+      const code=makeCode(); const id=peerId(code);
+      const peer=new Peer(id,{debug:1});
+      this.peer=peer;
+      peer.on("open",()=>{ state.net.on=true; state.net.code=code; state.net.status="on"; renderIfBoard(); });
+      peer.on("connection",(conn)=>{ this.attachConn(conn); });
+      peer.on("error",(err)=>{
+        const t=(err&&err.type)||"";
+        if((t==="unavailable-id"||t==="invalid-id") && tries<4){ tries++; try{peer.destroy();}catch(e){} attempt(); return; }
+        if(t==="peer-unavailable") return; // a phone tried a stale code; ignore
+        state.net.status="error"; renderIfBoard();
+      });
+    };
+    attempt();
+  },
+  attachConn(conn){
+    conn.on("open",()=>{ this.conns[conn.peer]=conn; });
+    conn.on("data",(data)=>{ try{ handlePhoneData(conn,data); }catch(e){} });
+    conn.on("close",()=>{ this.dropConn(conn.peer); });
+    conn.on("error",()=>{ this.dropConn(conn.peer); });
+  },
+  dropConn(peerId){
+    delete this.conns[peerId];
+    const pl=state.players.find(p=>p.connId===peerId); if(pl) pl.connected=false;
+    state.net.count=Object.keys(this.conns).length;
+    renderIfBoard();
+  }
+};
+function makeCode(){ const a="ABCDEFGHJKMNPQRSTUVWXYZ23456789"; let s=""; for(let k=0;k<4;k++) s+=a[Math.floor(Math.random()*a.length)]; return s; }
+function peerId(code){ return "jpdynight-"+code; }
+
+function handlePhoneData(conn, data){
+  if(!data||!data.type) return;
+  if(data.type==="join"){
+    const name=(data.name||"Player").toString().slice(0,24);
+    let idx=state.players.findIndex(p=>p.connId===conn.peer);
+    if(idx<0){
+      // reattach to a disconnected phone player with same name, else add new
+      idx=state.players.findIndex(p=>p.phone && p.connected===false && p.name===name);
+      if(idx>=0){ state.players[idx].connId=conn.peer; state.players[idx].connected=true; }
+      else { state.players.push({name, score:0, phone:true, connId:conn.peer, connected:true}); idx=state.players.length-1; }
+    } else { state.players[idx].name=name; state.players[idx].connected=true; }
+    state.net.count=Object.keys(Net.conns).length;
+    try{ conn.send({type:"welcome", index:idx, title:state.game?state.game.title:"Jeopardy", name:state.players[idx].name, score:state.players[idx].score}); }catch(e){}
+    // send current buzz state to the newcomer
+    sendBuzzStateTo(conn);
+    renderIfBoard();
+    return;
+  }
+  if(data.type==="buzz"){
+    const pl=state.players.find(p=>p.connId===conn.peer);
+    if(pl){ const i=state.players.indexOf(pl); buzzIn(i,"phone"); }
+    return;
+  }
+}
+function sendBuzzStateTo(conn){
+  const w=state.buzz.winner;
+  try{ conn.send({type:"buzzstate",
+    mode: state.screen==="clue" && !state.clueRevealed && state.buzz.armed ? "armed" : (w!==null?"locked":"idle"),
+    winner:w, winnerName: w!==null&&state.players[w]?state.players[w].name:"", lockout:state.buzz.lockout.slice() }); }catch(e){}
+}
+function pushScoresToPhones(){
+  if(!state.net.on) return;
+  state.players.forEach((p,i)=>{ if(p.phone&&p.connId&&Net.conns[p.connId]){ try{ Net.conns[p.connId].send({type:"score", score:p.score, index:i, name:p.name}); }catch(e){} } });
+}
+function renderIfBoard(){ if(state.screen==="board") renderBoard(); }
+
+/* ---------- PHONE CONTROLLER (this page opened with #join=CODE) ---------- */
+function parseJoinCode(){ const m=(location.hash||"").match(/join=([A-Za-z0-9]+)/); return m?m[1].toUpperCase():null; }
+
+const Ctrl = { peer:null, conn:null, code:null, index:null, name:"", score:0, mode:"idle", winner:null, winnerName:"", lockout:[], status:"" };
+
+function renderController(){
+  const c=Ctrl;
+  let statusText=c.status;
+  let btnLabel="Buzz", btnDisabled=true, btnClass="";
+  if(c.index===null){ // not joined yet
+    app.innerHTML = `
+      <div class="ctrl-page">
+        <div class="ctrl-title">JEOPARDY<br>BUZZER</div>
+        <div class="ctrl-status">Room ${esc(c.code||"")}</div>
+        <input class="txt" id="ctrlName" type="text" maxlength="24" placeholder="Your name" value="${esc(c.name)}" style="max-width:280px;font-size:18px;text-align:center;">
+        <button class="btn gold big" data-cact="join">Join game</button>
+        <div class="ctrl-status">${esc(statusText)}</div>
+      </div>`;
+    setTimeout(()=>{const el=$("#ctrlName"); if(el)el.focus();},40);
+    return;
+  }
+  if(c.mode==="armed" && !c.lockout.includes(c.index)){ btnDisabled=false; btnLabel="Buzz!"; }
+  else if(c.mode==="armed" && c.lockout.includes(c.index)){ btnLabel="Locked out"; }
+  else if(c.mode==="locked" && c.winner===c.index){ btnLabel="You're in!"; btnClass="in"; }
+  else if(c.mode==="locked"){ btnLabel=(c.winnerName||"Someone")+" is in"; }
+  else { btnLabel="Wait..."; }
+
+  app.innerHTML = `
+    <div class="ctrl-page">
+      <div class="ctrl-name">${esc(c.name)}</div>
+      <div class="ctrl-score">${money(c.score)}</div>
+      <button class="ctrl-buzz ${btnClass}" id="buzzBtn" ${btnDisabled?"disabled":""} data-cact="buzz">${esc(btnLabel)}</button>
+      <div class="ctrl-status">${esc(statusText || statusForMode())}</div>
+      ${c.status.indexOf("Disconnected")>=0?`<button class="btn ghost" data-cact="rejoin">Reconnect</button>`:""}
+    </div>`;
+}
+function statusForMode(){
+  const c=Ctrl;
+  if(c.mode==="armed") return c.lockout.includes(c.index)?"You already missed this clue":"Tap the moment you know it";
+  if(c.mode==="locked") return c.winner===c.index?"You buzzed first":"Buzzers locked";
+  return "Waiting for the next clue";
+}
+function ctrlConnect(){
+  const c=Ctrl;
+  if(typeof Peer==="undefined"){ c.status="Buzzer library could not load. Check your connection and reload."; renderController(); return; }
+  c.status="Connecting...";
+  const peer=new Peer({debug:1}); c.peer=peer;
+  peer.on("open",()=>{
+    const conn=peer.connect(peerId(c.code),{reliable:true}); c.conn=conn;
+    conn.on("open",()=>{ c.status="Connected"; conn.send({type:"join", name:c.name}); renderController(); });
+    conn.on("data",(data)=>{ handleHostData(data); });
+    conn.on("close",()=>{ c.status="Disconnected. Tap Reconnect."; renderController(); });
+    conn.on("error",()=>{ c.status="Connection problem. Tap Reconnect."; renderController(); });
+  });
+  peer.on("error",(err)=>{
+    const t=(err&&err.type)||"";
+    if(t==="peer-unavailable"){ c.status="No game found for this code. Ask the host to open phone buzzers."; }
+    else if(t==="browser-incompatible"){ c.status="This browser does not support buzzers. Try Chrome or Safari."; }
+    else { c.status="Could not connect. Make sure you opened the host's https link."; }
+    renderController();
+  });
+}
+function handleHostData(data){
+  if(!data||!data.type) return; const c=Ctrl;
+  if(data.type==="welcome"){ c.index=data.index; if(data.name)c.name=data.name; if(typeof data.score==="number")c.score=data.score; c.status=""; renderController(); }
+  else if(data.type==="buzzstate"){ c.mode=data.mode; c.winner=(typeof data.winner==="number")?data.winner:null; c.winnerName=data.winnerName||""; c.lockout=data.lockout||[]; c.status=""; renderController(); }
+  else if(data.type==="score"){ if(data.index===c.index){ c.score=data.score; renderController(); } }
+}
+
+/* controller event handling */
+document.addEventListener("click",(e)=>{
+  const t=e.target.closest("[data-cact]"); if(!t) return;
+  const a=t.getAttribute("data-cact"); const c=Ctrl;
+  if(a==="join"){ const nm=($("#ctrlName")||{}).value||""; c.name=nm.trim().slice(0,24)||"Player"; ctrlConnect(); }
+  else if(a==="buzz"){ if(c.conn&&c.conn.open && c.mode==="armed" && !c.lockout.includes(c.index)){ try{ c.conn.send({type:"buzz"}); }catch(e){} buzzSound(); } }
+  else if(a==="rejoin"){ try{ if(c.peer)c.peer.destroy(); }catch(e){} c.peer=null;c.conn=null; ctrlConnect(); }
+});
+
+/* =======================================================================
+   Game flow
+   ======================================================================= */
+function startPlay(game){
+  state.game=JSON.parse(JSON.stringify(game));
+  state.game.rounds.forEach(r=>r.categories.forEach(c=>c.clues.forEach(cl=>{cl.answered=false;})));
+  if(!state.players.length) state.players=[{name:"Player 1",score:0},{name:"Player 2",score:0}];
+  // keep phone players across replays; reset scores
+  state.players.forEach(p=>{p.score=0;});
+  state.controlling=0; state.round=0; idleBuzzers();
+  show("setup");
+}
+function openClue(ri,ci,ii){
+  state.clue={ri,ci,ii}; state.clueRevealed=false; state.lastCorrect=null;
+  const clue=state.game.rounds[ri].categories[ci].clues[ii];
+  if(clue.dailyDouble){ state.ddStage="splash"; state.ddWager=0; idleBuzzers(); }
+  else { state.ddStage=null; armBuzzers(); }
+  show("clue");
+}
+function closeClue(){
+  const {ri,ci,ii}=state.clue;
+  state.game.rounds[ri].categories[ci].clues[ii].answered=true;
+  if(state.lastCorrect!==null) state.controlling=state.lastCorrect;
+  state.clue=null; state.ddStage=null; state.clueRevealed=false; idleBuzzers();
+  show("board");
+}
+function judge(i, correct, amt){
+  if(correct){ state.players[i].score+=amt; state.lastCorrect=i; } else state.players[i].score-=amt;
+  pushScoresToPhones();
+  if(state.screen==="clue") renderClue();
+}
+function nextRound(){
+  if(state.round===0){
+    const left=countRemaining(0);
+    if(left>0 && !confirm(left+" clue(s) are still unplayed. Move on to Double Jeopardy anyway?")) return;
+    state.round=1; idleBuzzers(); show("board");
+  } else {
+    const left=countRemaining(1);
+    if(left>0 && !confirm(left+" clue(s) are still unplayed. Move on to Final Jeopardy anyway?")) return;
+    startFinal();
+  }
+}
+function startFinal(){
+  state.finalStep="category"; state.finalBase=state.players.map(p=>p.score);
+  state.finalWagers=state.players.map(()=>0); state.finalOutcomes=state.players.map(()=>null);
+  idleBuzzers(); show("final");
+}
+function commitFinalScores(){
+  state.players.forEach((p,i)=>{ const w=state.finalWagers[i]||0; const oc=state.finalOutcomes[i];
+    p.score=state.finalBase[i]+(oc==="correct"?w:oc==="wrong"?-w:0); });
+  pushScoresToPhones();
+}
+
+/* =======================================================================
+   Export / Import / media upload
+   ======================================================================= */
+function exportGame(game){
+  const data=JSON.stringify(game,null,2); const blob=new Blob([data],{type:"application/json"});
+  const url=URL.createObjectURL(blob); const a=document.createElement("a");
+  const safe=(game.title||"jeopardy").replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"").toLowerCase()||"jeopardy";
+  a.href=url; a.download=safe+".json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function validateGame(obj){
+  if(!obj||typeof obj!=="object") throw new Error("Not a game file.");
+  const g=blankGame(); if(typeof obj.title==="string") g.title=obj.title;
+  if(Array.isArray(obj.rounds)) for(let ri=0;ri<2;ri++){ const src=obj.rounds[ri];
+    if(src&&Array.isArray(src.categories)) for(let ci=0;ci<6;ci++){ const sc=src.categories[ci];
+      if(sc){ if(typeof sc.title==="string") g.rounds[ri].categories[ci].title=sc.title;
+        if(Array.isArray(sc.clues)) for(let ii=0;ii<5;ii++){ const cl=sc.clues[ii];
+          if(cl) g.rounds[ri].categories[ci].clues[ii]={ clue:typeof cl.clue==="string"?cl.clue:"", answer:typeof cl.answer==="string"?cl.answer:"",
+            dailyDouble:!!cl.dailyDouble, mediaType:["none","image","audio"].includes(cl.mediaType)?cl.mediaType:"none", media:typeof cl.media==="string"?cl.media:"" }; } } } }
+  if(obj.final&&typeof obj.final==="object"){ g.final={ category:typeof obj.final.category==="string"?obj.final.category:"",
+    clue:typeof obj.final.clue==="string"?obj.final.clue:"", answer:typeof obj.final.answer==="string"?obj.final.answer:"",
+    mediaType:["none","image","audio"].includes(obj.final.mediaType)?obj.final.mediaType:"none", media:typeof obj.final.media==="string"?obj.final.media:"" }; }
+  return g;
+}
+function triggerImport(){ $("#importFile").click(); }
+$("#importFile").addEventListener("change",function(e){
+  const file=e.target.files[0]; if(!file) return; const reader=new FileReader();
+  reader.onload=function(ev){ try{ const g=validateGame(JSON.parse(ev.target.result)); state.game=g; state.editId=null; state.editTab=0; show("editor"); toast("Game imported. Review it, then save or play."); }
+    catch(err){ alert("That file could not be read as a game: "+err.message); } };
+  reader.readAsText(file); e.target.value="";
+});
+function uid(){ return "g"+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+async function saveCurrentEdit(){
+  if(!state.game.title||!state.game.title.trim()) state.game.title="Untitled Game";
+  if(!state.editId) state.editId=uid();
+  try{ await Store.save(state.editId,state.game); return true; }
+  catch(e){ alert("Could not save (the game may be too large, often due to uploaded media). Use Export to a file instead, or use media URLs rather than uploads."); return false; }
+}
+// media upload via a transient file input
+let mediaTarget=null;
+function startMediaUpload(target){
+  mediaTarget=target;
+  const inp=document.createElement("input"); inp.type="file";
+  inp.accept = target.kind==="audio" ? "audio/*" : "image/*";
+  inp.onchange=()=>{ const f=inp.files[0]; if(!f) return;
+    const MB=f.size/1048576;
+    if(MB>4){ alert("That file is "+MB.toFixed(1)+" MB. Please use a file under 4 MB, or paste a URL instead."); return; }
+    const r=new FileReader();
+    r.onload=()=>{ setMedia(target, r.result); if(MB>1.2) toast("Large media added ("+MB.toFixed(1)+" MB). Saving may fail; a URL is lighter."); renderEditorBody(); };
+    r.readAsDataURL(f);
+  };
+  inp.click();
+}
+function getClueByAttrs(t){
+  if(t.dataset.finalMedia==="1" || t.getAttribute("data-final-media")==="1") return state.game.final;
+  const r=+t.getAttribute("data-r"), c=+t.getAttribute("data-c"), i=+t.getAttribute("data-i");
+  return state.game.rounds[r].categories[c].clues[i];
+}
+function setMedia(target, value){ const obj=target.obj; obj.media=value; }
+
+/* =======================================================================
+   Main event handling (host / editor / setup)
+   ======================================================================= */
+app.addEventListener("click", async (e)=>{
+  const t=e.target.closest("[data-act]"); if(!t) return;
+  // background click closes room modal
+  if(t.getAttribute("data-act")==="close-room-bg" && !e.target.closest("[data-stop]")){ state.net.showModal=false; renderBoard(); return; }
+  const act=t.getAttribute("data-act"); const id=t.getAttribute("data-id");
+  const i=t.getAttribute("data-i")!==null?parseInt(t.getAttribute("data-i"),10):null;
+
+  switch(act){
+    /* home */
+    case "play-sample": state.editId=null; startPlay(sampleGame()); break;
+    case "new-game": state.game=blankGame(); state.editId=null; state.editTab=0; show("editor"); break;
+    case "import": triggerImport(); break;
+    case "play-saved": { const g=await Store.load(id); if(g){state.editId=id; startPlay(g);} else toast("Could not load that game."); break; }
+    case "edit-saved": { const g=await Store.load(id); if(g){state.game=g; state.editId=id; state.editTab=0; show("editor");} else toast("Could not load that game."); break; }
+    case "export-saved": { const g=await Store.load(id); if(g) exportGame(g); break; }
+    case "del-saved": if(confirm("Delete this game for good?")){ await Store.remove(id); renderHome(); } break;
+
+    /* editor */
+    case "ed-home": show("home"); break;
+    case "ed-tab": state.editTab=parseInt(t.getAttribute("data-tab"),10); renderEditor(); break;
+    case "ed-save": { const okSaved=await saveCurrentEdit(); if(okSaved) toast(Store.available?"Game saved.":"Saved for this session. Use Export to keep it."); break; }
+    case "ed-export": exportGame(state.game); break;
+    case "ed-play": await saveCurrentEdit(); startPlay(state.game); break;
+    case "media-upload": { const obj=getClueByAttrs(t); const kind=obj.mediaType==="audio"?"audio":"image"; startMediaUpload({obj,kind}); break; }
+    case "media-clear": { const obj=getClueByAttrs(t); obj.media=""; renderEditorBody(); break; }
+
+    /* setup */
+    case "setup-home": show("home"); break;
+    case "add-player": if(state.players.length<6){ state.players.push({name:"Player "+(state.players.length+1),score:0}); renderPlayerInputs(); } break;
+    case "rm-player": state.players.splice(i,1); renderPlayerInputs(); break;
+    case "start-game": state.players.forEach(p=>{ if(!p.name.trim())p.name="Player"; p.score=0; }); state.controlling=0; state.round=0; show("board"); break;
+
+    /* board */
+    case "open-clue": openClue(parseInt(t.getAttribute("data-r"),10),parseInt(t.getAttribute("data-c"),10),parseInt(t.getAttribute("data-i"),10)); break;
+    case "give-control": state.controlling=i; renderScores(); break;
+    case "score-plus": e.stopPropagation(); state.players[i].score+=100; renderScores(); pushScoresToPhones(); break;
+    case "score-minus": e.stopPropagation(); state.players[i].score-=100; renderScores(); pushScoresToPhones(); break;
+    case "next-round": nextRound(); break;
+    case "quit": if(confirm("Leave the game and return home? Scores will be lost.")){ idleBuzzers(); show("home"); } break;
+
+    /* room (phone buzzers) */
+    case "open-room": state.net.showModal=true; if(!state.net.on && state.net.status!=="connecting" && location.protocol!=="file:" && typeof Peer!=="undefined") Net.hostStart(); renderBoard(); break;
+    case "close-room": case "close-room-bg": state.net.showModal=false; renderBoard(); break;
+    case "retry-room": state.net.status="off"; Net.stop(); Net.hostStart(); renderBoard(); break;
+
+    /* clue: daily double */
+    case "dd-to-wager": state.ddStage="wager"; renderClue(); break;
+    case "dd-confirm-wager": { const max=parseInt(t.getAttribute("data-max"),10); let w=parseInt(($("#ddWagerInput")||{}).value,10); if(isNaN(w)||w<0)w=0; if(w>max)w=max; state.ddWager=w; state.ddStage="play"; state.clueRevealed=false; renderClue(); break; }
+
+    /* clue: buzzing + reveal + judge */
+    case "buzz": buzzIn(i,"screen"); break;
+    case "buzz-correct": buzzCorrect(i, parseInt(t.getAttribute("data-amt"),10)); break;
+    case "buzz-wrong": buzzWrong(i, parseInt(t.getAttribute("data-amt"),10)); break;
+    case "reveal": state.clueRevealed=true; state.buzz.armed=false; stopTimer(); idleBuzzers(); renderClue(); break;
+    case "timer-toggle": startTimer(30); t.disabled=true; t.textContent="Timer running"; break;
+    case "judge": judge(i, t.getAttribute("data-correct")==="1", parseInt(t.getAttribute("data-amt"),10)); break;
+    case "close-clue": closeClue(); break;
+
+    /* final */
+    case "final-to-wager": state.finalStep="wager"; renderFinal(); break;
+    case "final-reveal-clue":
+      document.querySelectorAll("[data-fwager]").forEach(inp=>{ const idx=+inp.getAttribute("data-i"); const mx=+inp.getAttribute("data-max"); let w=parseInt(inp.value,10); if(isNaN(w)||w<0)w=0; if(w>mx)w=mx; state.finalWagers[idx]=w; });
+      state.finalStep="clue"; renderFinal(); break;
+    case "final-to-reveal": stopTimer(); state.finalStep="reveal"; renderFinal(); break;
+    case "final-judge": { const oc=t.getAttribute("data-oc"); state.finalOutcomes[i]=(state.finalOutcomes[i]===oc)?null:oc; commitFinalScores(); renderFinal(); break; }
+    case "final-results": commitFinalScores(); show("gameover"); break;
+
+    /* game over */
+    case "play-again": startPlay(state.game); break;
+  }
+});
+
+/* editor live binding (no re-render so focus stays) */
+app.addEventListener("input",(e)=>{
+  const el=e.target;
+  if(el.matches("[data-bind='title']")){ state.game.title=el.value; return; }
+  if(el.hasAttribute("data-cat-title")){ state.game.rounds[+el.getAttribute("data-r")].categories[+el.getAttribute("data-c")].title=el.value; return; }
+  if(el.hasAttribute("data-clue")){ const o=state.game.rounds[+el.getAttribute("data-r")].categories[+el.getAttribute("data-c")].clues[+el.getAttribute("data-i")]; o[el.getAttribute("data-field")]=el.value; return; }
+  if(el.hasAttribute("data-murl")){ const o=getClueByAttrs(el); o.media=el.value; return; }
+  if(el.hasAttribute("data-final")){ state.game.final[el.getAttribute("data-final")]=el.value; return; }
+  if(el.hasAttribute("data-pname")){ state.players[+el.getAttribute("data-i")].name=el.value; return; }
+});
+/* editor change (selects + checkboxes) */
+app.addEventListener("change",(e)=>{
+  const el=e.target;
+  if(el.hasAttribute("data-dd")){ const o=state.game.rounds[+el.getAttribute("data-r")].categories[+el.getAttribute("data-c")].clues[+el.getAttribute("data-i")]; o.dailyDouble=el.checked; const lab=el.closest("[data-ddlabel]"); if(lab)lab.classList.toggle("on",el.checked); return; }
+  if(el.hasAttribute("data-mtype")){ const o=getClueByAttrs(el); o.mediaType=el.value; if(el.value==="none") o.media=""; renderEditorBody(); return; }
+});
+
+/* keyboard: number keys buzz; Esc closes a revealed clue */
+document.addEventListener("keydown",(e)=>{
+  if(state.screen==="clue" && !state.clueRevealed && state.buzz.armed && state.buzz.winner===null){
+    const k=BUZZ_KEYS.indexOf(e.key);
+    if(k>=0 && k<state.players.length){ e.preventDefault(); buzzIn(k,"key"); return; }
+  }
+  if(e.key==="Escape" && state.screen==="clue" && state.clueRevealed){ closeClue(); }
+});
+
+/* =======================================================================
+   Boot: phone controller vs main app
+   ======================================================================= */
+(function boot(){
+  const code=parseJoinCode();
+  if(code){ Ctrl.code=code; renderController(); }
+  else render();
+})();
+</script>
+</body>
+</html>
