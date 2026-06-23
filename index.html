@@ -199,6 +199,54 @@
   .ctrl-name{font-weight:700;font-size:20px;}
   .ctrl-score{font-family:"Anton",sans-serif;font-size:30px;color:var(--gold);}
 
+  /* answer clock + buzz order */
+  .ansclock{font-family:"Anton",sans-serif;font-size:clamp(22px,3vw,34px);color:var(--gold-bright);background:#0a0f3a;border:2px solid #2a3490;border-radius:10px;padding:2px 12px;margin-left:14px;min-width:64px;display:inline-block;text-align:center;}
+  .ansclock.low{color:#fff;background:#7a1d1d;border-color:#b33;animation:pulse .6s ease infinite;}
+  @keyframes pulse{50%{transform:scale(1.08);}}
+  .buzz-order{font-family:"Inter",system-ui,sans-serif;font-size:13px;color:#bcc4ff;text-align:center;margin:8px 0 2px;min-height:16px;}
+  .buzz-order .rt{color:var(--gold);}
+
+  /* mirrored clue on the phone */
+  .ctrl-clue{width:min(92vw,420px);background:#0a0f3a;border:1px solid #2a3490;border-radius:14px;padding:14px 16px;margin:4px 0 6px;}
+  .ctrl-clue-head{font-family:"Inter",system-ui,sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:6px;}
+  .ctrl-clue-img{max-width:100%;max-height:180px;border-radius:8px;display:block;margin:0 auto 8px;}
+  .ctrl-clue-note{font-size:13px;color:#9aa3d8;margin-bottom:6px;}
+  .ctrl-clue-text{font-size:16px;line-height:1.35;color:#eef;}
+  .ctrl-clue-ans{margin-top:8px;padding-top:8px;border-top:1px solid #1c2360;color:var(--gold-bright);font-weight:600;}
+
+  /* editor copy/paste + options */
+  .btn.xs{padding:3px 8px;font-size:11px;border-radius:7px;}
+  .catbox-head{display:flex;align-items:flex-end;gap:8px;}
+  .copy-row{display:flex;gap:6px;margin:6px 0 2px;}
+  .clue-tools{display:flex;gap:4px;flex-wrap:wrap;}
+  .opt-row{display:flex;gap:10px;align-items:flex-start;margin:10px 0;line-height:1.4;cursor:pointer;}
+  .opt-row input{margin-top:3px;width:18px;height:18px;accent-color:var(--gold);flex:none;}
+  .opt-row span{font-size:14px;color:#dfe3ff;}
+  .mirror-row{display:flex;gap:10px;align-items:flex-start;margin-top:14px;line-height:1.4;cursor:pointer;color:#cdd3ff;font-size:13px;}
+  .mirror-row input{margin-top:2px;width:18px;height:18px;accent-color:var(--gold);flex:none;}
+
+  /* who-picks-first spinner */
+  .spin-list{display:flex;flex-direction:column;gap:8px;margin-top:6px;}
+  .spin-name{font-family:"Anton",sans-serif;font-size:22px;letter-spacing:1px;color:#9aa3d8;padding:8px 10px;border-radius:10px;border:1px solid transparent;transition:none;}
+  .spin-name.on{color:#fff;background:#1b2470;border-color:#3a44a0;transform:scale(1.04);}
+  .spin-name.win{color:#04231a;background:radial-gradient(circle at 35% 30%,#7ef0c0,var(--good) 70%);border-color:#0f6347;transform:scale(1.07);}
+  #spinHost{position:fixed;inset:0;z-index:60;}
+
+  /* podium results */
+  .podium{position:relative;display:flex;align-items:flex-end;justify-content:center;gap:14px;margin:18px 0 24px;min-height:210px;}
+  .pod-col{display:flex;flex-direction:column;align-items:center;width:clamp(82px,22vw,150px);}
+  .pod-name{font-weight:700;font-size:15px;color:#eef;text-align:center;margin-bottom:2px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pod-score{font-family:"Anton",sans-serif;font-size:20px;color:var(--gold);margin-bottom:6px;}
+  .pod-score.neg{color:var(--bad);}
+  .pod-bar{width:100%;border-radius:10px 10px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:8px;font-family:"Anton",sans-serif;font-size:26px;color:rgba(255,255,255,.85);box-shadow:inset 0 -10px 24px rgba(0,0,0,.25);}
+  .pod-1{background:linear-gradient(180deg,#f3c172,#c98f30);color:#3a2706;}
+  .pod-2{background:linear-gradient(180deg,#cfd6ff,#8c97d8);color:#1a2050;}
+  .pod-3{background:linear-gradient(180deg,#e0a987,#b06f44);color:#3a1c08;}
+  .pod-empty{background:#161c4a;opacity:.4;width:100%;}
+  .confetti{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
+  .confetti span{position:absolute;top:-12px;left:var(--x);width:8px;height:12px;background:hsl(var(--h),80%,60%);opacity:.9;animation:fall 2.6s linear var(--d) 2;border-radius:2px;}
+  @keyframes fall{0%{transform:translateY(-12px) rotate(0);opacity:0;}10%{opacity:.95;}100%{transform:translateY(240px) rotate(360deg);opacity:0;}}
+
   @media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}
   @media (max-width:620px){.brand .tag{display:none;}}
 </style>
@@ -262,7 +310,14 @@ function peerOpts(servers){ return { debug:1, config:{ iceServers: servers } }; 
    Daily Double minimum is WAGER_MIN; Final Jeopardy minimum is 0 (you may decline to bet). */
 const WAGER_MIN = 5;
 const BET_FLOOR = 1000;
+const ANSWER_SECONDS = 10; // answer clock once someone buzzes in
 function clampWager(w, lo, hi){ w = parseInt(w,10); if(isNaN(w)) w = lo; if(w < lo) w = lo; if(w > hi) w = hi; return w; }
+
+/* Game options (house rules), with safe defaults. */
+function opt(){ return (state.game && state.game.opt) ? state.game.opt : {}; }
+function defaultOpt(){ return { penalty:true, randomDD:false, cats:6, base:200 }; }
+function catCount(){ const n=parseInt(opt().cats,10); return (isNaN(n)?6:Math.max(2,Math.min(6,n))); }
+function roundValues(ri){ const base=parseInt(opt().base,10)||200; const mult=ri===0?1:2; return [1,2,3,4,5].map(n=>n*mult*base); }
 
 /* tiny self-contained image for the sample (Japanese flag), so it always renders */
 const SAMPLE_FLAG = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2090%2060%27%3E%3Crect%20width%3D%2790%27%20height%3D%2760%27%20fill%3D%27%23ffffff%27/%3E%3Ccircle%20cx%3D%2745%27%20cy%3D%2730%27%20r%3D%2718%27%20fill%3D%27%23bc002d%27/%3E%3C/svg%3E";
@@ -364,7 +419,8 @@ function sampleGame(){
     ],
     final:{ category:"Famous Landmarks",
       clue:"Completed in 1889 for a world's fair, this iron tower was meant to be temporary.",
-      answer:"What is the Eiffel Tower?", mediaType:"none", media:"" }
+      answer:"What is the Eiffel Tower?", mediaType:"none", media:"" },
+    opt: defaultOpt()
   };
 }
 
@@ -372,7 +428,7 @@ function blankGame(){
   const round = (ri)=>({ categories:Array.from({length:6},()=>({
     title:"", clues:VALUES[ri].map(()=>({clue:"",answer:"",dailyDouble:false,mediaType:"none",media:""}))
   }))});
-  return { title:"Untitled Game", rounds:[round(0),round(1)], final:{category:"",clue:"",answer:"",mediaType:"none",media:""} };
+  return { title:"Untitled Game", rounds:[round(0),round(1)], final:{category:"",clue:"",answer:"",mediaType:"none",media:""}, opt:defaultOpt() };
 }
 
 /* =======================================================================
@@ -415,9 +471,10 @@ const state = {
   screen:"home", game:null, editId:null, editTab:0,
   players:[], controlling:0, round:0,
   clue:null, clueRevealed:false, ddStage:null, ddWager:0, lastCorrect:null,
-  buzz:{armed:false, winner:null, lockout:[]},
-  net:{on:false, code:null, status:"off", count:0, showModal:false},
+  buzz:{phase:"idle", winner:null, order:[], times:{}, lockout:[], armAt:0, winnerAt:0},
+  net:{on:false, code:null, status:"off", count:0, showModal:false, mirror:false},
   finalStep:null, finalBase:[], finalWagers:[], finalOutcomes:[],
+  undo:[], clip:{category:null, clue:null}, spin:null,
   timer:null
 };
 
@@ -498,6 +555,7 @@ function renderEditor(){
       <button class="${tab===0?"active":""}" data-act="ed-tab" data-tab="0">Jeopardy round</button>
       <button class="${tab===1?"active":""}" data-act="ed-tab" data-tab="1">Double Jeopardy</button>
       <button class="${tab===2?"active":""}" data-act="ed-tab" data-tab="2">Final Jeopardy</button>
+      <button class="${tab===3?"active":""}" data-act="ed-tab" data-tab="3">Options</button>
     </div>
     <div id="edBody"></div>`;
   renderEditorBody();
@@ -525,6 +583,23 @@ function mediaControls(prefix, attrs, mediaType, media){
 }
 function renderEditorBody(){
   const g=state.game, tab=state.editTab, body=$("#edBody");
+  if(!g.opt) g.opt=defaultOpt();
+  if(tab===3){
+    const o=g.opt; const ladder0=roundValues(0).map(v=>"$"+v).join(", "); const ladder1=roundValues(1).map(v=>"$"+v).join(", ");
+    body.innerHTML = `
+      <div class="card ui" style="max-width:680px;">
+        <h2 class="section">Game options</h2>
+        <p class="muted" style="margin-top:-6px;">House rules for this game. They save and travel with the file.</p>
+        <label class="opt-row"><input type="checkbox" data-opt="penalty" ${o.penalty!==false?"checked":""}><span><b>Wrong answers subtract points.</b> Turn off for a friendlier game where a miss just passes the buzz.</span></label>
+        <label class="opt-row"><input type="checkbox" data-opt="randomDD" ${o.randomDD?"checked":""}><span><b>Randomize Daily Doubles each game.</b> Ignores the ones you set below and scatters them fresh every time you play (1 in round one, 2 in round two).</span></label>
+        <label class="field" style="max-width:240px;"><span>Categories per round</span>
+          <select class="txt" data-opt-cats>${[3,4,5,6].map(k=>`<option value="${k}" ${catCount()===k?"selected":""}>${k} categories</option>`).join("")}</select></label>
+        <label class="field" style="max-width:240px;"><span>Base dollar value (first row)</span>
+          <input class="txt" type="number" min="50" step="50" data-opt-base value="${parseInt(o.base,10)||200}"></label>
+        <div class="muted ui" style="font-size:13px;line-height:1.5;">Row values<br>Round one: ${ladder0}<br>Round two: ${ladder1}</div>
+      </div>`;
+    return;
+  }
   if(tab===2){
     const f=g.final;
     body.innerHTML = `
@@ -542,15 +617,25 @@ function renderEditorBody(){
       </div>`;
     return;
   }
-  const ri=tab, cats=g.rounds[ri].categories;
+  const ri=tab, n=catCount(), cats=g.rounds[ri].categories.slice(0,n);
+  const vals=roundValues(ri);
+  const pasteCat = state.clip.category ? "" : "disabled";
+  const pasteClue = state.clip.clue ? "" : "disabled";
   body.innerHTML = `
+    <p class="muted ui" style="margin:0 0 10px;font-size:13px;">Showing ${n} categories (change this in Options). Use Copy and Paste to reuse a category or clue.</p>
     <div class="cats-grid ui">
       ${cats.map((cat,ci)=>`
         <div class="catbox">
-          <label class="field"><span>Category ${ci+1}</span>
-            <input class="txt" type="text" data-cat-title data-r="${ri}" data-c="${ci}" value="${esc(cat.title)}" placeholder="Category name"></label>
+          <div class="catbox-head">
+            <label class="field" style="flex:1;margin:0;"><span>Category ${ci+1}</span>
+              <input class="txt" type="text" data-cat-title data-r="${ri}" data-c="${ci}" value="${esc(cat.title)}" placeholder="Category name"></label>
+          </div>
+          <div class="copy-row">
+            <button class="btn ghost xs" data-act="cat-copy" data-r="${ri}" data-c="${ci}">Copy category</button>
+            <button class="btn ghost xs" data-act="cat-paste" data-r="${ri}" data-c="${ci}" ${pasteCat}>Paste</button>
+          </div>
           ${cat.clues.map((clue,ii)=>{
-            const val=VALUES[ri][ii];
+            const val=vals[ii];
             const attrs=`data-r="${ri}" data-c="${ci}" data-i="${ii}"`;
             return `
             <div class="cluebox">
@@ -558,6 +643,11 @@ function renderEditorBody(){
                 <span class="val">$${val}</span>
                 <label class="ddtoggle ${clue.dailyDouble?"on":""}" data-ddlabel ${attrs}>
                   <input type="checkbox" data-dd ${attrs} ${clue.dailyDouble?"checked":""}> Daily Double</label>
+                <span class="clue-tools">
+                  <button class="btn ghost xs" data-act="clue-copy" ${attrs} title="Copy this clue">Copy</button>
+                  <button class="btn ghost xs" data-act="clue-paste" ${attrs} ${pasteClue} title="Paste copied clue">Paste</button>
+                  <button class="btn ghost xs" data-act="clue-clear" ${attrs} title="Clear this clue">Clear</button>
+                </span>
               </div>
               <label class="field"><span>Clue</span>
                 <textarea class="txt" data-clue ${attrs} data-field="clue" placeholder="Write the clue">${esc(clue.clue)}</textarea></label>
@@ -617,26 +707,31 @@ function renderPlayerInputs(){
 
 /* ---------- BOARD ---------- */
 function renderBoard(){
-  const g=state.game, ri=state.round, cats=g.rounds[ri].categories;
+  const g=state.game, ri=state.round;
+  const n=catCount(); const cats=g.rounds[ri].categories.slice(0,n);
+  const vals=roundValues(ri);
   const remaining=countRemaining(ri);
   const nextLabel = ri===0?"Go to Double Jeopardy":"Go to Final Jeopardy";
   const net=state.net;
   const netDot = net.status==="on"?"on":net.status==="connecting"?"wait":"off";
   const netText = net.status==="on"?`Phone buzzers on - ${net.count} connected` : net.status==="connecting"?"Phone buzzers connecting..." : "Phone buzzers off";
+  const undoBtn = state.undo.length ? `<button class="btn ghost sm" data-act="undo" title="Undo the last score change">Undo</button>` : "";
   app.innerHTML = `
     <div class="board-head">
       <div class="brand"><h1 style="font-size:34px;">JEOPARDY</h1></div>
       <div class="row" style="align-items:center;">
         <span class="round-chip">${ROUND_NAMES[ri]} round</span>
         <button class="net-chip" data-act="open-room"><span class="dot ${netDot}"></span>${netText}</button>
+        <button class="btn ghost sm" data-act="spin-first" title="Pick who chooses first">Who starts?</button>
+        <button class="btn ghost sm" data-act="toggle-sound" title="Toggle sound">Sound: ${Sound.on?"on":"off"}</button>
         <button class="btn ghost sm" data-act="quit">Quit</button>
         <button class="btn gold sm" data-act="next-round">${nextLabel}</button>
       </div>
     </div>
     <div class="board-scroll">
-      <div class="board">
+      <div class="board" style="grid-template-columns:repeat(${n},minmax(108px,1fr));min-width:${n*112}px;">
         ${cats.map(c=>`<div class="cat-cell">${esc(c.title||"\u00A0")}</div>`).join("")}
-        ${VALUES[ri].map((val,ii)=>cats.map((cat,ci)=>{
+        ${vals.map((val,ii)=>cats.map((cat,ci)=>{
           const clue=cat.clues[ii]; const done=clue.answered;
           const has=(clue.clue||"").trim()||(clue.answer||"").trim()||(clue.media||"").trim();
           if(done||!has) return `<div class="clue-cell done"></div>`;
@@ -647,7 +742,10 @@ function renderBoard(){
     </div>
     <div class="board-foot">
       <div class="spread"><h2 class="section" style="margin:0;">Scores</h2>
-        <span class="muted ui" style="font-size:12px;">${remaining} clue${remaining===1?"":"s"} left this round. Tap a name to give board control.</span></div>
+        <span class="row" style="align-items:center;gap:10px;">
+          ${undoBtn}
+          <span class="muted ui" style="font-size:12px;">${remaining} clue${remaining===1?"":"s"} left. Tap a name to give board control.</span>
+        </span></div>
       <div class="scores" id="scores"></div>
     </div>
     ${net.showModal?roomModal():""}`;
@@ -666,7 +764,8 @@ function renderScores(){
     </div>`).join("");
 }
 function countRemaining(ri){
-  let n=0; state.game.rounds[ri].categories.forEach(cat=>cat.clues.forEach(c=>{
+  let n=0; const cc=catCount();
+  state.game.rounds[ri].categories.slice(0,cc).forEach(cat=>cat.clues.forEach(c=>{
     const has=(c.clue||"").trim()||(c.answer||"").trim()||(c.media||"").trim(); if(has&&!c.answered)n++; })); return n;
 }
 
@@ -707,6 +806,10 @@ function roomModal(){
       <div class="conn-list">
         ${state.players.filter(p=>p.phone).map(p=>`<div class="conn-item"><span class="dot ${p.connected===false?"off":"on"}"></span>${esc(p.name)}${p.connected===false?" (offline)":""}</div>`).join("") || `<div class="ui muted" style="font-size:13px;">No phones connected yet.</div>`}
       </div>
+      <label class="mirror-row ui">
+        <input type="checkbox" data-act="toggle-mirror" ${net.mirror?"checked":""}>
+        <span>Show the clue text and image on players' phones (handy in a big room). Daily Doubles stay hidden.</span>
+      </label>
       <div class="center" style="margin-top:16px;">
         ${net.status==="error"?`<button class="btn gold" data-act="retry-room">Try again</button>`:""}
         <button class="btn ghost" data-act="close-room">Close</button>
@@ -728,7 +831,7 @@ function renderClue(){
   const {ri,ci,ii}=state.clue;
   const clue=state.game.rounds[ri].categories[ci].clues[ii];
   const cat=state.game.rounds[ri].categories[ci].title||"";
-  const val=VALUES[ri][ii];
+  const val=roundValues(ri)[ii];
 
   if(clue.dailyDouble && state.ddStage){
     if(state.ddStage==="splash"){
@@ -742,7 +845,7 @@ function renderClue(){
       return;
     }
     if(state.ddStage==="wager"){
-      const max=Math.max(BET_FLOOR, state.players[state.controlling].score, VALUES[ri][VALUES[ri].length-1]);
+      const max=Math.max(BET_FLOOR, state.players[state.controlling].score, roundValues(ri)[4]);
       const min=Math.min(WAGER_MIN, max);
       const def=clampWager(val, min, max);
       app.innerHTML = `
@@ -765,36 +868,46 @@ function renderClue(){
   const isDD = clue.dailyDouble && state.ddStage==="play";
   const revealed = state.clueRevealed;
   const mediaHTML = clueMediaHTML(clue);
-  const winner = state.buzz.winner;
+  const b = state.buzz;
+  const winner = b.winner;
+  const undoBtn = state.undo.length ? `<button class="btn ghost sm" data-act="undo">Undo</button>` : "";
 
   // footer content depends on phase
   let foot;
   if(isDD){
     foot = revealed
-      ? `<div class="judge">${judgeRowsDD(val)}</div><div class="center"><button class="btn good big" data-act="close-clue">Back to board</button></div>`
+      ? `<div class="judge">${judgeRowsDD(val)}</div><div class="center">${undoBtn}<button class="btn good big" data-act="close-clue">Back to board</button></div>`
       : `<div class="center"><button class="btn ghost" data-act="timer-toggle">Start 30s timer</button><button class="btn gold big" data-act="reveal">Reveal answer</button></div>`;
   } else if(revealed){
-    foot = `<div class="judge">${judgeRowsAll(val)}</div><div class="center"><button class="btn good big" data-act="close-clue">Back to board</button></div>`;
+    foot = `<div class="judge">${judgeRowsAll(val)}</div><div class="center">${undoBtn}<button class="btn good big" data-act="close-clue">Back to board</button></div>`;
+  } else if(b.phase==="reading"){
+    // host has not opened buzzers yet (anti-mash gate)
+    foot = `
+      <div class="center"><div class="buzz-status">Read the clue aloud, then open the buzzers</div></div>
+      <div class="center"><button class="btn gold big" data-act="open-buzzers">Open buzzers <span class="khint">space</span></button>
+        <button class="btn ghost" data-act="reveal">Reveal answer</button></div>`;
   } else if(winner===null){
     // armed, waiting for a buzz
     foot = `
-      <div class="center"><div class="buzz-status armed">Buzzers armed - first to buzz is in</div></div>
+      <div class="center"><div class="buzz-status armed">Buzzers open - first to buzz is in</div></div>
       <div class="buzz-players">
-        ${state.players.map((p,i)=> state.buzz.lockout.includes(i)
+        ${state.players.map((p,i)=> b.lockout.includes(i)
           ? `<button class="buzzbtn out" disabled>${esc(p.name)} <span class="khint">out</span></button>`
           : `<button class="buzzbtn" data-act="buzz" data-i="${i}">${esc(p.name)} <span class="khint">key ${BUZZ_KEYS[i]||"-"}</span></button>`
         ).join("")}
       </div>
-      <div class="center"><button class="btn ghost" data-act="timer-toggle">Start 30s timer</button><button class="btn ghost" data-act="reveal">No one buzzed - reveal answer</button></div>`;
+      <div class="center"><button class="btn ghost" data-act="reveal">No one buzzed - reveal answer</button></div>`;
   } else {
-    // someone buzzed in, not yet revealed
+    // someone buzzed in, not yet revealed: answer clock + order + judge
     const p=state.players[winner];
     foot = `
-      <div class="center"><div class="buzz-winner">${esc(p.name)} is in!</div></div>
+      <div class="center"><div class="buzz-winner">${esc(p.name)} is in!</div><span class="ansclock" id="answerClock">${ANSWER_SECONDS}s</span></div>
+      <div class="buzz-order" id="buzzOrder">${buzzOrderHTML()}</div>
       <div class="center">
         <button class="btn good" data-act="buzz-correct" data-i="${winner}" data-amt="${val}">Correct +${money(val)}</button>
-        <button class="btn bad" data-act="buzz-wrong" data-i="${winner}" data-amt="${val}">Wrong -${money(val)}</button>
+        <button class="btn bad" data-act="buzz-wrong" data-i="${winner}" data-amt="${val}">Wrong${opt().penalty!==false?" -"+money(val):""}</button>
         <button class="btn gold" data-act="reveal">Reveal answer</button>
+        ${undoBtn}
       </div>`;
   }
 
@@ -893,6 +1006,31 @@ function wrapFinal(inner){
 }
 
 /* ---------- GAME OVER ---------- */
+/* ---------- Who picks first (spinner overlay) ---------- */
+function spinFirst(){
+  const n=state.players.length; if(n<1) return;
+  Sound.open();
+  const host=document.createElement("div"); host.id="spinHost"; document.body.appendChild(host);
+  let idx=Math.floor(Math.random()*n), ticks=0, total=16+Math.floor(Math.random()*(n+6)), delay=60;
+  const draw=(winner)=>{
+    host.innerHTML=`<div class="modal"><div class="modal-card ui" style="text-align:center;max-width:440px;">
+      <h2 class="section">Who picks first?</h2>
+      <div class="spin-list">${state.players.map((p,i)=>`<div class="spin-name ${i===idx?(winner?"win":"on"):""}">${esc(p.name)}</div>`).join("")}</div>
+      ${winner?`<div class="center" style="margin-top:14px;"><button class="btn gold" id="spinDone">${esc(state.players[idx].name)} starts</button></div>`:`<div class="muted ui" style="margin-top:10px;font-size:13px;">Spinning...</div>`}
+    </div></div>`;
+    if(winner){ const b=host.querySelector("#spinDone"); if(b) b.onclick=()=>{ if(document.body.contains(host)) host.remove(); renderBoard(); }; }
+  };
+  draw(false);
+  const step=()=>{
+    idx=(idx+1)%n; ticks++; Sound.pick(); draw(false);
+    if(ticks>=total){ state.controlling=idx; Sound.correct(); draw(true);
+      setTimeout(()=>{ if(document.body.contains(host)){ host.remove(); renderBoard(); } }, 2600); return; }
+    if(ticks>total-5) delay+=55; else if(ticks>total-9) delay+=20;
+    setTimeout(step, delay);
+  };
+  setTimeout(step, delay);
+}
+
 function renderGameOver(){
   const ranked=state.players.map((p,i)=>({...p,i})).sort((a,b)=>b.score-a.score);
   const top=ranked[0];
@@ -901,10 +1039,19 @@ function renderGameOver(){
   if(top.score<=0) banner="No winner this time";
   else if(tie) banner="It's a tie!";
   else banner=esc(top.name)+" wins!";
+  // podium order: 2nd, 1st, 3rd
+  const pods=[{p:ranked[1],place:2,h:120},{p:ranked[0],place:1,h:170},{p:ranked[2],place:3,h:90}];
+  const podiumHTML = pods.map(s=> s.p ? `
+    <div class="pod-col">
+      <div class="pod-name">${esc(s.p.name)}</div>
+      <div class="pod-score ${s.p.score<0?"neg":""}">${money(s.p.score)}</div>
+      <div class="pod-bar pod-${s.place}" style="height:${s.h}px;">${s.place}</div>
+    </div>` : `<div class="pod-col"><div class="pod-bar pod-empty" style="height:40px;"></div></div>`).join("");
   app.innerHTML = `
     <div class="topbar"><div class="brand"><h1>RESULTS</h1></div></div>
     <div class="card"><div class="final-wrap">
       <div class="winner-banner">${banner}</div>
+      <div class="podium">${podiumHTML}<div class="confetti">${Array.from({length:24}).map((_,k)=>`<span style="--d:${(k%6)*0.18}s;--x:${(k*37)%100}%;--h:${(k*53)%360}"></span>`).join("")}</div></div>
       <table class="results-table ui"><thead><tr><th>#</th><th>Player</th><th style="text-align:right;">Final score</th></tr></thead>
         <tbody>${ranked.map((p,r)=>`<tr><td>${r+1}</td><td>${esc(p.name)}</td><td class="score" style="text-align:right;${p.score<0?"color:var(--bad)":""}">${money(p.score)}</td></tr>`).join("")}</tbody></table>
       <div class="center" style="margin-top:20px;"><button class="btn gold big" data-act="play-again">Play this game again</button><button class="btn ghost big" data-act="quit">Home</button></div>
@@ -920,51 +1067,109 @@ function startTimer(seconds){
   let left=seconds; const fill=$("#tfill"), num=$("#tnum");
   state.timer=setInterval(()=>{ left--; if(num)num.textContent=Math.max(0,left);
     if(fill){fill.style.width=Math.max(0,(left/seconds)*100)+"%"; if(left<=10)fill.classList.add("low");}
-    if(left<=0){stopTimer();tone(660,0.5);} },1000);
+    if(left<=0){stopTimer();Sound.timesUp();} },1000);
 }
 function stopTimer(){ if(state.timer){clearInterval(state.timer);state.timer=null;} }
-function tone(freq,dur){
-  try{ const C=window.AudioContext||window.webkitAudioContext; if(!C) return; const ctx=new C();
-    const o=ctx.createOscillator(), g=ctx.createGain(); o.type="sine"; o.frequency.value=freq; o.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.0001,ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.25,ctx.currentTime+0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+dur); o.start(); o.stop(ctx.currentTime+dur+0.02);
-  }catch(e){}
+
+/* Synthesized sounds (no copyrighted material). Shared by host and phone. */
+const Sound = {
+  on:true, ctx:null,
+  _ac(){ try{ if(!this.ctx){ const C=window.AudioContext||window.webkitAudioContext; if(!C) return null; this.ctx=new C(); } if(this.ctx.state==="suspended") this.ctx.resume(); return this.ctx; }catch(e){ return null; } },
+  blip(freq,dur,type,vol,when){ if(!this.on) return; const ctx=this._ac(); if(!ctx) return; const t0=ctx.currentTime+(when||0);
+    const o=ctx.createOscillator(), g=ctx.createGain(); o.type=type||"sine"; o.frequency.setValueAtTime(freq,t0); o.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.0001,t0); g.gain.exponentialRampToValueAtTime(vol||0.2,t0+0.015); g.gain.exponentialRampToValueAtTime(0.0001,t0+dur); o.start(t0); o.stop(t0+dur+0.03); },
+  buzz(i){ const f=[523,587,659,698,784,880]; this.blip(f[(i||0)%f.length],0.18,"square",0.18); },
+  correct(){ this.blip(660,0.12,"sine",0.2,0); this.blip(990,0.2,"sine",0.2,0.12); },
+  wrong(){ this.blip(220,0.18,"sawtooth",0.16,0); this.blip(155,0.3,"sawtooth",0.16,0.16); },
+  timesUp(){ this.blip(392,0.16,"square",0.2,0); this.blip(294,0.16,"square",0.2,0.18); this.blip(220,0.34,"square",0.2,0.36); },
+  open(){ this.blip(740,0.07,"sine",0.14,0); this.blip(988,0.09,"sine",0.14,0.07); },
+  daily(){ [523,659,784,1047].forEach((f,k)=>this.blip(f,0.12,"sine",0.2,k*0.11)); this.blip(1318,0.3,"sine",0.22,0.46); },
+  round(){ this.blip(440,0.12,"sine",0.18,0); this.blip(659,0.2,"sine",0.18,0.12); },
+  win(){ [523,659,784,1047].forEach((f,k)=>this.blip(f,0.16,"sine",0.22,k*0.13)); this.blip(784,0.28,"sine",0.2,0.56); this.blip(1047,0.5,"sine",0.24,0.7); },
+  pick(){ this.blip(880,0.045,"square",0.1); }
+};
+function buzzSound(){ Sound.buzz(typeof Ctrl!=="undefined" && Ctrl.index!=null ? Ctrl.index : 0); }
+
+/* Host answer clock: counts down on the host screen, plays a sound at zero, no auto-judge. */
+let _answerClock=null;
+function startAnswerClock(){
+  stopAnswerClock(); if(!ANSWER_SECONDS) return;
+  let left=ANSWER_SECONDS; updateAnswerClockUI(left);
+  _answerClock=setInterval(()=>{ left--; updateAnswerClockUI(left); if(left<=0){ stopAnswerClock(); Sound.timesUp(); } },1000);
 }
-function buzzSound(){ tone(880,0.18); }
+function stopAnswerClock(){ if(_answerClock){clearInterval(_answerClock);_answerClock=null;} }
+function updateAnswerClockUI(left){ const el=$("#answerClock"); if(el){ el.textContent=Math.max(0,left)+"s"; el.classList.toggle("low", left<=3); } }
 
 /* =======================================================================
    Buzz logic (shared by phone, keyboard, on-screen)
    ======================================================================= */
-function armBuzzers(){ state.buzz={armed:true,winner:null,lockout:[]}; broadcastBuzz(); }
-function idleBuzzers(){ state.buzz={armed:false,winner:null,lockout:[]}; broadcastBuzz(); }
+function newBuzz(phase){ return {phase:phase||"idle", winner:null, order:[], times:{}, lockout:[], armAt:0, winnerAt:0}; }
+function idleBuzzers(){ state.buzz=newBuzz("idle"); stopAnswerClock(); broadcastBuzz(); }
+function readyBuzzers(){ state.buzz=newBuzz("reading"); stopAnswerClock(); broadcastBuzz(); } // clue open, host has not opened buzzers yet
+function openBuzzers(){ // host gate (and re-open for a steal); keeps any lockout
+  const b=state.buzz; b.phase="armed"; b.winner=null; b.order=[]; b.times={}; b.armAt=Date.now(); b.winnerAt=0;
+  stopAnswerClock(); Sound.open(); broadcastBuzz(); renderClue();
+}
+function recordOrder(i){ const b=state.buzz; if(b.order.indexOf(i)>=0) return; const dt=b.armAt?Math.max(0,(Date.now()-b.armAt)/1000):0; b.order.push(i); b.times[i]=dt; }
 function buzzIn(i, source){
   if(state.screen!=="clue" || state.clueRevealed) return;
-  if(!state.buzz.armed || state.buzz.winner!==null) return;
   if(i<0 || i>=state.players.length) return;
   if(state.buzz.lockout.includes(i)) return;
-  state.buzz.winner=i; state.buzz.armed=false;
-  buzzSound(); broadcastBuzz(); renderClue();
+  const b=state.buzz;
+  if(b.phase==="armed" && b.winner===null){
+    b.winner=i; b.phase="locked"; b.winnerAt=Date.now(); recordOrder(i);
+    Sound.buzz(i); broadcastBuzz(); renderClue(); startAnswerClock(); return;
+  }
+  // capture near-simultaneous (in-flight) buzzes for the order list, briefly after the winner
+  if(b.phase==="locked" && b.winner!==i && b.order.indexOf(i)<0 && (Date.now()-(b.winnerAt||0))<1800){
+    recordOrder(i); broadcastBuzz(); updateOrderUI(); return;
+  }
 }
 function buzzWrong(i, amt){
-  state.players[i].score -= amt;
+  pushUndo("score change");
+  if(opt().penalty!==false) state.players[i].score -= amt;
   if(!state.buzz.lockout.includes(i)) state.buzz.lockout.push(i);
-  state.buzz.winner=null; state.buzz.armed=true; broadcastBuzz(); renderClue();
+  state.buzz.winner=null; state.buzz.phase="armed"; state.buzz.order=[]; state.buzz.times={}; state.buzz.armAt=Date.now(); state.buzz.winnerAt=0;
+  stopAnswerClock(); Sound.wrong(); broadcastBuzz(); renderClue();
 }
 function buzzCorrect(i, amt){
+  pushUndo("score change");
   state.players[i].score += amt; state.lastCorrect=i;
-  state.buzz.armed=false; state.clueRevealed=true; idleBuzzers(); renderClue();
+  state.clueRevealed=true; Sound.correct(); idleBuzzers(); broadcastClue(); renderClue();
 }
 function buzzStateMsg(){
-  const w=state.buzz.winner;
-  return { type:"buzzstate",
-    mode: (w!==null) ? "locked" : ((!state.clueRevealed && state.buzz.armed) ? "armed" : "idle"),
-    winner: w, winnerName: (w!==null && state.players[w]) ? state.players[w].name : "",
-    lockout: state.buzz.lockout.slice() };
+  const b=state.buzz, w=b.winner;
+  let mode;
+  if(w!==null) mode="locked";
+  else if(b.phase==="armed" && !state.clueRevealed) mode="armed";
+  else if(b.phase==="reading" && !state.clueRevealed) mode="reading";
+  else mode="idle";
+  return { type:"buzzstate", mode, winner:w, winnerName:(w!==null&&state.players[w])?state.players[w].name:"", lockout:b.lockout.slice() };
 }
 function broadcastBuzz(){
   if(!state.net.on) return;
   Net.broadcast(buzzStateMsg());
   pushScoresToPhones();
+}
+function buzzOrderHTML(){
+  const b=state.buzz; if(!b.order || !b.order.length) return "";
+  return "Buzz order: "+b.order.map((idx,r)=>`${r+1}. ${esc(state.players[idx]?state.players[idx].name:"?")}${(b.times&&b.times[idx]!=null)?` <span class="rt">${b.times[idx].toFixed(2)}s</span>`:""}`).join(" &middot; ");
+}
+function updateOrderUI(){ const el=$("#buzzOrder"); if(el) el.innerHTML=buzzOrderHTML(); }
+
+/* ---------- Undo (last score change) ---------- */
+function pushUndo(label){
+  state.undo.push({ scores: state.players.map(p=>p.score), controlling: state.controlling, lastCorrect: state.lastCorrect, label: label||"score change" });
+  if(state.undo.length>60) state.undo.shift();
+}
+function undoLast(){
+  if(!state.undo.length){ toast("Nothing to undo."); return; }
+  const u=state.undo.pop();
+  const k=Math.min(u.scores.length, state.players.length);
+  for(let j=0;j<k;j++) state.players[j].score=u.scores[j];
+  state.controlling=u.controlling; state.lastCorrect=u.lastCorrect;
+  pushScoresToPhones(); toast("Undid last score change.");
+  if(state.screen==="board") renderBoard(); else if(state.screen==="clue") renderClue();
 }
 
 /* =======================================================================
@@ -1036,8 +1241,9 @@ function handlePhoneData(conn, data){
     }
     state.net.count=Object.keys(Net.conns).length;
     try{ conn.send({type:"welcome", index:idx, title:state.game?state.game.title:"Jeopardy", name:state.players[idx].name, score:state.players[idx].score}); }catch(e){}
-    // send current buzz state to the newcomer
+    // send current buzz state (and mirrored clue, if on) to the newcomer
     sendBuzzStateTo(conn);
+    if(state.net.mirror){ try{ conn.send(clueMirrorPayload()); }catch(e){} }
     renderIfBoard();
     return;
   }
@@ -1054,12 +1260,32 @@ function pushScoresToPhones(){
   if(!state.net.on) return;
   state.players.forEach((p,i)=>{ if(p.phone&&p.connId&&Net.conns[p.connId]){ try{ Net.conns[p.connId].send({type:"score", score:p.score, index:i, name:p.name}); }catch(e){} } });
 }
+/* Optional: mirror the current clue to players' phones. Daily Doubles are never mirrored
+   (only the controlling player should see them). */
+function clueMirrorPayload(){
+  if(state.screen==="final" && (state.finalStep==="clue" || state.finalStep==="reveal")){
+    const f=state.game.final;
+    return { type:"clue", cat:"Final Jeopardy"+(f.category?" - "+f.category:""), val:0, text:f.clue||"",
+      mediaType:f.mediaType||"none", media:f.media||"", revealed: state.finalStep==="reveal", answer: state.finalStep==="reveal"?(f.answer||""):"" };
+  }
+  if(!state.clue) return {type:"clue", clear:true};
+  const {ri,ci,ii}=state.clue;
+  const clue=state.game.rounds[ri].categories[ci].clues[ii];
+  if(clue.dailyDouble) return {type:"clue", clear:true};
+  return { type:"clue", cat: state.game.rounds[ri].categories[ci].title||"", val: roundValues(ri)[ii],
+    text: clue.clue||"", mediaType: clue.mediaType||"none", media: clue.media||"",
+    revealed: !!state.clueRevealed, answer: state.clueRevealed ? (clue.answer||"") : "" };
+}
+function broadcastClue(){
+  if(!state.net.on) return;
+  Net.broadcast(state.net.mirror ? clueMirrorPayload() : {type:"clue", clear:true});
+}
 function renderIfBoard(){ if(state.screen==="board") renderBoard(); else if(state.screen==="setup") renderSetup(); }
 
 /* ---------- PHONE CONTROLLER (this page opened with #join=CODE) ---------- */
 function parseJoinCode(){ const m=(location.hash||"").match(/join=([A-Za-z0-9]+)/); return m?m[1].toUpperCase():null; }
 
-const Ctrl = { peer:null, conn:null, code:null, index:null, name:"", score:0, mode:"idle", winner:null, winnerName:"", lockout:[], status:"", canRetry:false, _cid:null };
+const Ctrl = { peer:null, conn:null, code:null, index:null, name:"", score:0, mode:"idle", winner:null, winnerName:"", lockout:[], status:"", canRetry:false, _cid:null, clue:null, clock:null, _early:false, _armReady:true };
 
 /* A stable id for this phone so reconnects rebind to the same player.
    Persists across reloads via localStorage when available, else for this page load. */
@@ -1068,6 +1294,25 @@ function getClientId(){
   try{ let v=localStorage.getItem("jpdy_cid"); if(!v){ v="c"+Math.random().toString(36).slice(2,10); localStorage.setItem("jpdy_cid",v); } Ctrl._cid=v; }
   catch(e){ Ctrl._cid="c"+Math.random().toString(36).slice(2,10); }
   return Ctrl._cid;
+}
+
+/* phone answer clock (mirrors the host countdown for the player who buzzed in) */
+let _ctrlClock=null;
+function startCtrlClock(){ stopCtrlClock(); let left=ANSWER_SECONDS; Ctrl.clock=left; renderController();
+  _ctrlClock=setInterval(()=>{ left--; Ctrl.clock=Math.max(0,left); renderController(); if(left<=0){ stopCtrlClock(); Sound.timesUp(); } },1000); }
+function stopCtrlClock(){ if(_ctrlClock){clearInterval(_ctrlClock);_ctrlClock=null;} if(Ctrl.clock!==null){ Ctrl.clock=null; } }
+
+function clueCardHTML(){
+  const cl=Ctrl.clue; if(!cl) return "";
+  let media="";
+  if(cl.mediaType==="image" && cl.media) media=`<img class="ctrl-clue-img" src="${esc(cl.media)}" alt="clue image">`;
+  else if(cl.mediaType==="audio" && cl.media) media=`<div class="ctrl-clue-note">Listen on the main screen</div>`;
+  return `<div class="ctrl-clue">
+    <div class="ctrl-clue-head">${esc(cl.cat||"")}${cl.val?` &middot; ${money(cl.val)}`:""}</div>
+    ${media}
+    <div class="ctrl-clue-text">${esc(cl.text||"")}</div>
+    ${cl.revealed && cl.answer ? `<div class="ctrl-clue-ans">${esc(cl.answer)}</div>` : ""}
+  </div>`;
 }
 
 function renderController(){
@@ -1087,16 +1332,19 @@ function renderController(){
     setTimeout(()=>{const el=$("#ctrlName"); if(el)el.focus();},40);
     return;
   }
-  if(c.mode==="armed" && !c.lockout.includes(c.index)){ btnDisabled=false; btnLabel="Buzz!"; }
-  else if(c.mode==="armed" && c.lockout.includes(c.index)){ btnLabel="Locked out"; }
-  else if(c.mode==="locked" && c.winner===c.index){ btnLabel="You're in!"; btnClass="in"; }
+  if(c.mode==="locked" && c.winner===c.index){ btnLabel = c.clock!=null ? (c.clock+"s") : "You're in!"; btnClass="in"; }
   else if(c.mode==="locked"){ btnLabel=(c.winnerName||"Someone")+" is in"; }
+  else if(c.mode==="armed" && c.lockout.includes(c.index)){ btnLabel="Locked out"; }
+  else if(c.mode==="armed" && !c._armReady){ btnLabel="Wait..."; }
+  else if(c.mode==="armed"){ btnDisabled=false; btnLabel="Buzz!"; }
+  else if(c.mode==="reading"){ btnLabel="Get ready"; }
   else { btnLabel="Wait..."; }
 
   app.innerHTML = `
     <div class="ctrl-page">
       <div class="ctrl-name">${esc(c.name)}</div>
       <div class="ctrl-score">${money(c.score)}</div>
+      ${clueCardHTML()}
       <button class="ctrl-buzz ${btnClass}" id="buzzBtn" ${btnDisabled?"disabled":""} data-cact="buzz">${esc(btnLabel)}</button>
       <div class="ctrl-status">${esc(statusText || statusForMode())}</div>
       ${c.canRetry?`<button class="btn ghost" data-cact="rejoin">Reconnect</button>`:""}
@@ -1104,8 +1352,9 @@ function renderController(){
 }
 function statusForMode(){
   const c=Ctrl;
-  if(c.mode==="armed") return c.lockout.includes(c.index)?"You already missed this clue":"Tap the moment you know it";
-  if(c.mode==="locked") return c.winner===c.index?"You buzzed first":"Buzzers locked";
+  if(c.mode==="reading") return "Listen... buzzers open in a moment";
+  if(c.mode==="armed") return c.lockout.includes(c.index)?"You already missed this clue":(c._armReady?"Tap the moment you know it":"You tapped early - wait for it");
+  if(c.mode==="locked") return c.winner===c.index?"You buzzed first - answer now":"Buzzers locked";
   return "Waiting for the next clue";
 }
 function ctrlConnect(){
@@ -1135,7 +1384,19 @@ function ctrlConnect(){
 function handleHostData(data){
   if(!data||!data.type) return; const c=Ctrl;
   if(data.type==="welcome"){ c.index=data.index; if(data.name)c.name=data.name; if(typeof data.score==="number")c.score=data.score; c.status=""; c.canRetry=false; renderController(); }
-  else if(data.type==="buzzstate"){ c.mode=data.mode; c.winner=(typeof data.winner==="number")?data.winner:null; c.winnerName=data.winnerName||""; c.lockout=data.lockout||[]; c.status=""; renderController(); }
+  else if(data.type==="buzzstate"){
+    c.mode=data.mode; c.winner=(typeof data.winner==="number")?data.winner:null; c.winnerName=data.winnerName||""; c.lockout=data.lockout||[]; c.status="";
+    if(c.mode==="reading"){ c._early=false; c._armReady=true; stopCtrlClock(); }
+    else if(c.mode==="armed"){
+      if(c._early){ c._armReady=false; c._early=false; setTimeout(()=>{ c._armReady=true; if(Ctrl.mode==="armed") renderController(); }, 280); }
+      else c._armReady=true;
+      stopCtrlClock();
+    }
+    else if(c.mode==="locked"){ if(c.winner===c.index) startCtrlClock(); else stopCtrlClock(); }
+    else stopCtrlClock();
+    renderController();
+  }
+  else if(data.type==="clue"){ c.clue = data.clear ? null : {cat:data.cat,val:data.val,text:data.text,mediaType:data.mediaType,media:data.media,revealed:data.revealed,answer:data.answer}; renderController(); }
   else if(data.type==="score"){ if(data.index===c.index){ c.score=data.score; renderController(); } }
 }
 
@@ -1144,38 +1405,54 @@ document.addEventListener("click",(e)=>{
   const t=e.target.closest("[data-cact]"); if(!t) return;
   const a=t.getAttribute("data-cact"); const c=Ctrl;
   if(a==="join"){ const nm=($("#ctrlName")||{}).value||""; c.name=nm.trim().slice(0,24)||"Player"; ctrlConnect(); }
-  else if(a==="buzz"){ if(c.conn&&c.conn.open && c.mode==="armed" && !c.lockout.includes(c.index)){ try{ c.conn.send({type:"buzz"}); }catch(e){} buzzSound(); } }
+  else if(a==="buzz"){
+    if(c.mode==="reading"){ c._early=true; Sound.pick(); return; } // tapped before buzzers opened: penalized when they open
+    if(c.conn&&c.conn.open && c.mode==="armed" && c._armReady && !c.lockout.includes(c.index)){ try{ c.conn.send({type:"buzz"}); }catch(e){} Sound.buzz(c.index||0); }
+  }
   else if(a==="rejoin"){ const nm=($("#ctrlName")||{}).value; if(nm!=null && nm.trim()) c.name=nm.trim().slice(0,24); ctrlConnect(); }
 });
 
 /* =======================================================================
    Game flow
    ======================================================================= */
+function placeRandomDDs(g){
+  g.rounds.forEach((rd,ri)=>{
+    const cells=[];
+    rd.categories.forEach((cat,ci)=>cat.clues.forEach((cl,ii)=>{ cl.dailyDouble=false;
+      const has=(cl.clue||"").trim()||(cl.answer||"").trim()||(cl.media||"").trim(); if(has && ci<((g.opt&&g.opt.cats)||6)) cells.push([ci,ii]); }));
+    const n = ri===0?1:2;
+    for(let k=0;k<n && cells.length;k++){ const idx=Math.floor(Math.random()*cells.length); const cell=cells.splice(idx,1)[0]; rd.categories[cell[0]].clues[cell[1]].dailyDouble=true; }
+  });
+}
 function startPlay(game){
   state.game=JSON.parse(JSON.stringify(game));
+  if(!state.game.opt) state.game.opt=defaultOpt();
   state.game.rounds.forEach(r=>r.categories.forEach(c=>c.clues.forEach(cl=>{cl.answered=false;})));
+  if(state.game.opt.randomDD) placeRandomDDs(state.game);
   if(!state.players.length) state.players=[{name:"Player 1",score:0},{name:"Player 2",score:0}];
   // keep phone players across replays; reset scores
   state.players.forEach(p=>{p.score=0;});
-  state.controlling=0; state.round=0; idleBuzzers();
+  state.controlling=0; state.round=0; state.undo=[]; idleBuzzers();
   show("setup");
 }
 function openClue(ri,ci,ii){
   state.clue={ri,ci,ii}; state.clueRevealed=false; state.lastCorrect=null;
   const clue=state.game.rounds[ri].categories[ci].clues[ii];
-  if(clue.dailyDouble){ state.ddStage="splash"; state.ddWager=0; idleBuzzers(); }
-  else { state.ddStage=null; armBuzzers(); }
+  if(clue.dailyDouble){ state.ddStage="splash"; state.ddWager=0; Sound.daily(); idleBuzzers(); broadcastClue(); }
+  else { state.ddStage=null; Sound.open(); readyBuzzers(); broadcastClue(); }
   show("clue");
 }
 function closeClue(){
   const {ri,ci,ii}=state.clue;
   state.game.rounds[ri].categories[ci].clues[ii].answered=true;
   if(state.lastCorrect!==null) state.controlling=state.lastCorrect;
-  state.clue=null; state.ddStage=null; state.clueRevealed=false; idleBuzzers();
+  state.clue=null; state.ddStage=null; state.clueRevealed=false; idleBuzzers(); broadcastClue();
   show("board");
 }
 function judge(i, correct, amt){
-  if(correct){ state.players[i].score+=amt; state.lastCorrect=i; } else state.players[i].score-=amt;
+  pushUndo("score change");
+  if(correct){ state.players[i].score+=amt; state.lastCorrect=i; Sound.correct(); }
+  else { if(opt().penalty!==false) state.players[i].score-=amt; Sound.wrong(); }
   pushScoresToPhones();
   if(state.screen==="clue") renderClue();
 }
@@ -1183,7 +1460,7 @@ function nextRound(){
   if(state.round===0){
     const left=countRemaining(0);
     if(left>0 && !confirm(left+" clue(s) are still unplayed. Move on to Double Jeopardy anyway?")) return;
-    state.round=1; idleBuzzers(); show("board");
+    state.round=1; idleBuzzers(); Sound.round(); show("board");
   } else {
     const left=countRemaining(1);
     if(left>0 && !confirm(left+" clue(s) are still unplayed. Move on to Final Jeopardy anyway?")) return;
@@ -1222,6 +1499,8 @@ function validateGame(obj){
   if(obj.final&&typeof obj.final==="object"){ g.final={ category:typeof obj.final.category==="string"?obj.final.category:"",
     clue:typeof obj.final.clue==="string"?obj.final.clue:"", answer:typeof obj.final.answer==="string"?obj.final.answer:"",
     mediaType:["none","image","audio"].includes(obj.final.mediaType)?obj.final.mediaType:"none", media:typeof obj.final.media==="string"?obj.final.media:"" }; }
+  if(obj.opt && typeof obj.opt==="object"){ g.opt={ penalty:obj.opt.penalty!==false, randomDD:!!obj.opt.randomDD,
+    cats:Math.max(2,Math.min(6,parseInt(obj.opt.cats,10)||6)), base:Math.max(1,parseInt(obj.opt.base,10)||200) }; }
   return g;
 }
 function triggerImport(){ $("#importFile").click(); }
@@ -1298,40 +1577,52 @@ app.addEventListener("click", async (e)=>{
     /* board */
     case "open-clue": openClue(parseInt(t.getAttribute("data-r"),10),parseInt(t.getAttribute("data-c"),10),parseInt(t.getAttribute("data-i"),10)); break;
     case "give-control": state.controlling=i; renderScores(); break;
-    case "score-plus": e.stopPropagation(); state.players[i].score+=100; renderScores(); pushScoresToPhones(); break;
-    case "score-minus": e.stopPropagation(); state.players[i].score-=100; renderScores(); pushScoresToPhones(); break;
+    case "score-plus": e.stopPropagation(); pushUndo("score change"); state.players[i].score+=100; renderScores(); pushScoresToPhones(); break;
+    case "score-minus": e.stopPropagation(); pushUndo("score change"); state.players[i].score-=100; renderScores(); pushScoresToPhones(); break;
+    case "undo": undoLast(); break;
+    case "toggle-sound": Sound.on=!Sound.on; if(Sound.on) Sound.pick(); renderIfBoard(); break;
+    case "spin-first": spinFirst(); break;
     case "next-round": nextRound(); break;
-    case "quit": if(confirm("Leave the game and return home? Scores will be lost.")){ idleBuzzers(); show("home"); } break;
+    case "quit": if(confirm("Leave the game and return home? Scores will be lost.")){ idleBuzzers(); broadcastClue(); show("home"); } break;
 
     /* room (phone buzzers) */
     case "open-room": state.net.showModal=true; if(!state.net.on && state.net.status!=="connecting" && location.protocol!=="file:" && typeof Peer!=="undefined") Net.hostStart(); renderIfBoard(); break;
     case "close-room": case "close-room-bg": state.net.showModal=false; renderIfBoard(); break;
     case "retry-room": state.net.status="off"; Net.stop(); Net.hostStart(); renderIfBoard(); break;
+    case "toggle-mirror": state.net.mirror=!state.net.mirror; broadcastClue(); renderIfBoard(); break;
 
     /* clue: daily double */
     case "dd-to-wager": state.ddStage="wager"; renderClue(); break;
     case "dd-confirm-wager": { const max=+t.getAttribute("data-max"); const min=+t.getAttribute("data-min"); state.ddWager=clampWager(($("#ddWagerInput")||{}).value, min, max); state.ddStage="play"; state.clueRevealed=false; renderClue(); break; }
 
     /* clue: buzzing + reveal + judge */
+    case "open-buzzers": openBuzzers(); break;
     case "buzz": buzzIn(i,"screen"); break;
     case "buzz-correct": buzzCorrect(i, parseInt(t.getAttribute("data-amt"),10)); break;
     case "buzz-wrong": buzzWrong(i, parseInt(t.getAttribute("data-amt"),10)); break;
-    case "reveal": state.clueRevealed=true; state.buzz.armed=false; stopTimer(); idleBuzzers(); renderClue(); break;
+    case "reveal": state.clueRevealed=true; stopTimer(); stopAnswerClock(); idleBuzzers(); broadcastClue(); renderClue(); break;
     case "timer-toggle": startTimer(30); t.disabled=true; t.textContent="Timer running"; break;
     case "judge": judge(i, t.getAttribute("data-correct")==="1", parseInt(t.getAttribute("data-amt"),10)); break;
     case "close-clue": closeClue(); break;
 
     /* final */
-    case "final-to-wager": state.finalStep="wager"; renderFinal(); break;
+    case "final-to-wager": state.finalStep="wager"; broadcastClue(); renderFinal(); break;
     case "final-reveal-clue":
       document.querySelectorAll("[data-fwager]").forEach(inp=>{ const idx=+inp.getAttribute("data-i"); const mx=+inp.getAttribute("data-max"); state.finalWagers[idx]=clampWager(inp.value, 0, mx); });
-      state.finalStep="clue"; renderFinal(); break;
-    case "final-to-reveal": stopTimer(); state.finalStep="reveal"; renderFinal(); break;
+      state.finalStep="clue"; Sound.open(); broadcastClue(); renderFinal(); break;
+    case "final-to-reveal": stopTimer(); state.finalStep="reveal"; broadcastClue(); renderFinal(); break;
     case "final-judge": { const oc=t.getAttribute("data-oc"); state.finalOutcomes[i]=(state.finalOutcomes[i]===oc)?null:oc; commitFinalScores(); renderFinal(); break; }
-    case "final-results": commitFinalScores(); show("gameover"); break;
+    case "final-results": commitFinalScores(); Sound.win(); idleBuzzers(); broadcastClue(); show("gameover"); break;
 
     /* game over */
     case "play-again": startPlay(state.game); break;
+
+    /* editor: copy / paste */
+    case "cat-copy": { const r=+t.getAttribute("data-r"), c=+t.getAttribute("data-c"); state.clip.category=JSON.parse(JSON.stringify(state.game.rounds[r].categories[c])); toast("Category copied. Use Paste on another category."); renderEditorBody(); break; }
+    case "cat-paste": { if(!state.clip.category){ toast("Copy a category first."); break; } const r=+t.getAttribute("data-r"), c=+t.getAttribute("data-c"); state.game.rounds[r].categories[c]=JSON.parse(JSON.stringify(state.clip.category)); renderEditorBody(); break; }
+    case "clue-copy": { const o=getClueByAttrs(t); state.clip.clue={clue:o.clue,answer:o.answer,dailyDouble:!!o.dailyDouble,mediaType:o.mediaType||"none",media:o.media||""}; toast("Clue copied. Use Paste on another clue."); renderEditorBody(); break; }
+    case "clue-paste": { if(!state.clip.clue){ toast("Copy a clue first."); break; } const o=getClueByAttrs(t); o.clue=state.clip.clue.clue; o.answer=state.clip.clue.answer; o.dailyDouble=state.clip.clue.dailyDouble; o.mediaType=state.clip.clue.mediaType; o.media=state.clip.clue.media; renderEditorBody(); break; }
+    case "clue-clear": { const o=getClueByAttrs(t); o.clue=""; o.answer=""; o.dailyDouble=false; o.mediaType="none"; o.media=""; renderEditorBody(); break; }
   }
 });
 
@@ -1343,6 +1634,7 @@ app.addEventListener("input",(e)=>{
   if(el.hasAttribute("data-clue")){ const o=state.game.rounds[+el.getAttribute("data-r")].categories[+el.getAttribute("data-c")].clues[+el.getAttribute("data-i")]; o[el.getAttribute("data-field")]=el.value; return; }
   if(el.hasAttribute("data-murl")){ const o=getClueByAttrs(el); o.media=el.value; return; }
   if(el.hasAttribute("data-final")){ state.game.final[el.getAttribute("data-final")]=el.value; return; }
+  if(el.hasAttribute("data-opt-base")){ if(!state.game.opt)state.game.opt=defaultOpt(); state.game.opt.base=Math.max(1,parseInt(el.value,10)||200); return; }
   if(el.hasAttribute("data-pname")){ state.players[+el.getAttribute("data-i")].name=el.value; return; }
 });
 /* editor change (selects + checkboxes) */
@@ -1351,13 +1643,21 @@ app.addEventListener("change",(e)=>{
   if(el.hasAttribute("data-wmin")){ const lo=+el.getAttribute("data-wmin"), hi=+el.getAttribute("data-wmax"); el.value=clampWager(el.value, lo, hi); return; }
   if(el.hasAttribute("data-dd")){ const o=state.game.rounds[+el.getAttribute("data-r")].categories[+el.getAttribute("data-c")].clues[+el.getAttribute("data-i")]; o.dailyDouble=el.checked; const lab=el.closest("[data-ddlabel]"); if(lab)lab.classList.toggle("on",el.checked); return; }
   if(el.hasAttribute("data-mtype")){ const o=getClueByAttrs(el); o.mediaType=el.value; if(el.value==="none") o.media=""; renderEditorBody(); return; }
+  if(el.hasAttribute("data-opt")){ if(!state.game.opt)state.game.opt=defaultOpt(); state.game.opt[el.getAttribute("data-opt")]=el.checked; return; }
+  if(el.hasAttribute("data-opt-cats")){ if(!state.game.opt)state.game.opt=defaultOpt(); state.game.opt.cats=Math.max(2,Math.min(6,parseInt(el.value,10)||6)); renderEditorBody(); return; }
+  if(el.hasAttribute("data-opt-base")){ if(!state.game.opt)state.game.opt=defaultOpt(); state.game.opt.base=Math.max(1,parseInt(el.value,10)||200); renderEditorBody(); return; }
 });
 
-/* keyboard: number keys buzz; Esc closes a revealed clue */
+/* keyboard: space opens buzzers, number keys buzz, Esc closes a revealed clue */
 document.addEventListener("keydown",(e)=>{
-  if(state.screen==="clue" && !state.clueRevealed && state.buzz.armed && state.buzz.winner===null){
-    const k=BUZZ_KEYS.indexOf(e.key);
-    if(k>=0 && k<state.players.length){ e.preventDefault(); buzzIn(k,"key"); return; }
+  if(state.screen==="clue" && !state.clueRevealed){
+    const clue = state.clue ? state.game.rounds[state.clue.ri].categories[state.clue.ci].clues[state.clue.ii] : null;
+    const normal = clue && !(clue.dailyDouble && state.ddStage && state.ddStage!=="play");
+    if(normal && state.buzz.phase==="reading" && (e.key===" "||e.code==="Space")){ e.preventDefault(); openBuzzers(); return; }
+    if(state.buzz.phase==="armed" && state.buzz.winner===null){
+      const k=BUZZ_KEYS.indexOf(e.key);
+      if(k>=0 && k<state.players.length){ e.preventDefault(); buzzIn(k,"key"); return; }
+    }
   }
   if(e.key==="Escape" && state.screen==="clue" && state.clueRevealed){ closeClue(); }
 });
