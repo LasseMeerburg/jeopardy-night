@@ -257,8 +257,11 @@ function ensureIce(){
 function peerOpts(servers){ return { debug:1, config:{ iceServers: servers } }; }
 
 /* Wager rules: nobody can ever wager a negative amount.
+   Everyone can always wager up to BET_FLOOR regardless of score, and higher if their
+   score (or, for a Daily Double, the top clue value) exceeds it.
    Daily Double minimum is WAGER_MIN; Final Jeopardy minimum is 0 (you may decline to bet). */
 const WAGER_MIN = 5;
+const BET_FLOOR = 1000;
 function clampWager(w, lo, hi){ w = parseInt(w,10); if(isNaN(w)) w = lo; if(w < lo) w = lo; if(w > hi) w = hi; return w; }
 
 /* tiny self-contained image for the sample (Japanese flag), so it always renders */
@@ -739,7 +742,7 @@ function renderClue(){
       return;
     }
     if(state.ddStage==="wager"){
-      const max=Math.max(state.players[state.controlling].score, VALUES[ri][VALUES[ri].length-1]);
+      const max=Math.max(BET_FLOOR, state.players[state.controlling].score, VALUES[ri][VALUES[ri].length-1]);
       const min=Math.min(WAGER_MIN, max);
       const def=clampWager(val, min, max);
       app.innerHTML = `
@@ -849,9 +852,9 @@ function renderFinal(){
       <div class="final-cat" style="font-size:clamp(24px,5vw,44px);">${esc(f.category||"Final Category")}</div>
       <p class="ui muted">Type each player's secret wager. Max is their current score (or 0 if not positive).</p>
       <div class="wager-grid">
-        ${state.players.map((p,i)=>{ const max=Math.max(0,p.score); const out=max<=0; return `
-          <div class="wbox ui"><div class="wn">${esc(p.name)}</div><div class="wmax">${out?`Sitting out (${money(p.score)})`:`Up to ${money(max)}`}</div>
-            <input class="txt" type="number" min="0" max="${max}" value="${out?0:(state.finalWagers[i]||0)}" data-fwager data-i="${i}" data-max="${max}" data-wmin="0" data-wmax="${max}" ${out?"disabled":""} style="font-family:'Anton',sans-serif;color:var(--gold);font-size:20px;text-align:center;"></div>`; }).join("")}
+        ${state.players.map((p,i)=>{ const max=Math.max(BET_FLOOR,p.score); return `
+          <div class="wbox ui"><div class="wn">${esc(p.name)}</div><div class="wmax">${money(p.score)} now &middot; up to ${money(max)}</div>
+            <input class="txt" type="number" min="0" max="${max}" value="${state.finalWagers[i]||0}" data-fwager data-i="${i}" data-max="${max}" data-wmin="0" data-wmax="${max}" style="font-family:'Anton',sans-serif;color:var(--gold);font-size:20px;text-align:center;"></div>`; }).join("")}
       </div>
       <div class="center" style="margin-top:18px;"><button class="btn gold big" data-act="final-reveal-clue">Lock wagers and show clue</button></div>`);
     return;
@@ -1012,13 +1015,25 @@ function handlePhoneData(conn, data){
   if(!data||!data.type) return;
   if(data.type==="join"){
     const name=(data.name||"Player").toString().slice(0,24);
+    const cid=(data.cid||"").toString().slice(0,40);
     let idx=state.players.findIndex(p=>p.connId===conn.peer);
     if(idx<0){
-      // reattach to a disconnected phone player with same name, else add new
-      idx=state.players.findIndex(p=>p.phone && p.connected===false && p.name===name);
-      if(idx>=0){ state.players[idx].connId=conn.peer; state.players[idx].connected=true; }
-      else { state.players.push({name, score:0, phone:true, connId:conn.peer, connected:true}); idx=state.players.length-1; }
-    } else { state.players[idx].name=name; state.players[idx].connected=true; }
+      // a returning phone: match by its stable id (survives reconnects/reloads),
+      // or by name for older clients that send no id
+      if(cid) idx=state.players.findIndex(p=>p.phone && p.cid===cid);
+      else { idx=state.players.findIndex(p=>p.phone && p.name===name && p.connected===false);
+             if(idx<0) idx=state.players.findIndex(p=>p.phone && p.name===name); }
+    }
+    if(idx>=0){
+      const oldId=state.players[idx].connId;
+      state.players[idx].connId=conn.peer;       // rebind to the new connection first
+      state.players[idx].connected=true;
+      state.players[idx].name=name;
+      if(cid) state.players[idx].cid=cid;
+      if(oldId && oldId!==conn.peer && Net.conns[oldId]){ try{ Net.conns[oldId].close(); }catch(e){} delete Net.conns[oldId]; }
+    } else {
+      state.players.push({name, score:0, phone:true, connId:conn.peer, connected:true, cid}); idx=state.players.length-1;
+    }
     state.net.count=Object.keys(Net.conns).length;
     try{ conn.send({type:"welcome", index:idx, title:state.game?state.game.title:"Jeopardy", name:state.players[idx].name, score:state.players[idx].score}); }catch(e){}
     // send current buzz state to the newcomer
@@ -1044,7 +1059,16 @@ function renderIfBoard(){ if(state.screen==="board") renderBoard(); else if(stat
 /* ---------- PHONE CONTROLLER (this page opened with #join=CODE) ---------- */
 function parseJoinCode(){ const m=(location.hash||"").match(/join=([A-Za-z0-9]+)/); return m?m[1].toUpperCase():null; }
 
-const Ctrl = { peer:null, conn:null, code:null, index:null, name:"", score:0, mode:"idle", winner:null, winnerName:"", lockout:[], status:"", canRetry:false };
+const Ctrl = { peer:null, conn:null, code:null, index:null, name:"", score:0, mode:"idle", winner:null, winnerName:"", lockout:[], status:"", canRetry:false, _cid:null };
+
+/* A stable id for this phone so reconnects rebind to the same player.
+   Persists across reloads via localStorage when available, else for this page load. */
+function getClientId(){
+  if(Ctrl._cid) return Ctrl._cid;
+  try{ let v=localStorage.getItem("jpdy_cid"); if(!v){ v="c"+Math.random().toString(36).slice(2,10); localStorage.setItem("jpdy_cid",v); } Ctrl._cid=v; }
+  catch(e){ Ctrl._cid="c"+Math.random().toString(36).slice(2,10); }
+  return Ctrl._cid;
+}
 
 function renderController(){
   const c=Ctrl;
@@ -1093,7 +1117,7 @@ function ctrlConnect(){
     const peer=new Peer(peerOpts(servers)); c.peer=peer;
     peer.on("open",()=>{
       const conn=peer.connect(peerId(c.code),{reliable:true}); c.conn=conn;
-      conn.on("open",()=>{ c.status="Connected"; conn.send({type:"join", name:c.name}); renderController(); });
+      conn.on("open",()=>{ c.status="Connected"; conn.send({type:"join", name:c.name, cid:getClientId()}); renderController(); });
       conn.on("data",(data)=>{ handleHostData(data); });
       conn.on("close",()=>{ c.canRetry=true; c.status="Disconnected. Tap Reconnect."; renderController(); });
       conn.on("error",()=>{ c.canRetry=true; c.status="Could not link to the host screen. Put your phone on the same Wi-Fi (a hotspot works best), then tap Reconnect."; renderController(); });
